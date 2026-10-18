@@ -96,3 +96,4 @@
 ## [2026-10-13] - Desktop dashboard: tažení scrolluje i v Lively (setPointerCapture tam vyhazoval výjimku)
 ## [2026-10-13] - Autorun nestartuje, když je 5h nebo týdenní limit na 85 % a víc
 ## [2026-10-13] - Péče o PR (rebase, CI, konflikty) z create_app do dashboard/prcare.py
+## [2026-10-18] - Slučování překrývajících se návrhů (výzva v dashboardu) a projektový plán ROADMAP.md pro feature scouta

@@ -10,6 +10,7 @@ REQUIRED = ("path", "base", "verify")
 TIME_RE = re.compile(r"^\s*(\d{1,2}):(\d{2})\s*$")
 EVERY_RE = re.compile(r"^\s*(\d+)\s*([mhd])\s*$")
 UNIT = {"m": 60, "h": 3600, "d": 86400}
+PLAN_FILE = "ROADMAP.md"  # the project's mid-term product plan in its repo root; the feature scout follows it
 
 
 @dataclass(frozen=True)

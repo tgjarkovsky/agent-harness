@@ -32,5 +32,5 @@ def test_recent_block_gh_failure_keeps_commits(monkeypatch):
 @pytest.mark.parametrize("name", ["fix", "feature", "cleanup"])
 def test_prompts_contain_recent(name):
     text = render_prompt(f"discover_{name}.md", project="p", max_diff_lines=800, verify="x", known="-",
-                         notes="-", lessons="", recent="#7 [merged] X")
+                         notes="-", lessons="", recent="#7 [merged] X", plan="-")
     assert "#7 [merged] X" in text

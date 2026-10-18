@@ -66,6 +66,7 @@
   details summary { cursor:pointer; color:var(--muted); font-size:13px; }
   details p { margin:6px 0 0; font-size:13px; white-space:pre-wrap; }
   .attention { border-color:var(--warn); }
+  pre.plan { white-space:pre-wrap; max-height:24em; overflow:auto; font-size:12px; margin:4px 0; }
   .meter { height:10px; background:var(--line); border-radius:99px; overflow:hidden; margin:6px 0; }
   .meter > div { height:100%; background:var(--accent); }
   .meter.high > div { background:var(--warn); }
@@ -278,6 +279,7 @@
     </section>
     <section id="planBox" class="attention" hidden><h2>Plán ke schválení</h2><div id="plan"></div></section>
     <section id="questionBox" class="attention" hidden><h2>Dotazy k úkolům</h2><div id="questions"></div></section>
+    <section id="mergeBox" class="attention" hidden><h2>Návrhy ke sloučení</h2><div id="merges"></div></section>
     <div class="projects" id="projects"></div>
   </div>
 
@@ -293,7 +295,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-let serveOn = false, questionIds = "", planId = "", projectsKey = "", lessonsKey = "", scopeKey = "", boot = null;
+let serveOn = false, questionIds = "", mergesKey = "", planId = "", projectsKey = "", lessonsKey = "", scopeKey = "", boot = null;
 let excluded = new Set();  // unchecked in the project filter; a new project starts checked
 try { excluded = new Set(JSON.parse(localStorage.getItem("excluded") || "[]")); } catch (e) {}
 
@@ -576,7 +578,10 @@ function renderProjects(projects, proposals) {
     return `<section><h3 class="pname">${esc(p.name)}</h3>
       <div class="counts"><span><b>${c[" "]}</b> ve frontě</span><span><b>${c["~"]}</b> návrhů</span>
         <span><b>${c["x"]}</b> hotovo</span>${c["?"] ? `<span style="color:var(--warn)"><b>${c["?"]}</b> nejasné</span>` : ""}
-        ${cleanupInfo(p.cleanup)}</div>
+        ${cleanupInfo(p.cleanup)}
+        ${p.plan ? `<span title="ROADMAP.md: podle něj scout navrhuje features">📘 plán</span>` : `<span class="muted" title="Bez ROADMAP.md navrhuje scout features bez směru">📘 bez plánu</span>`}
+        <button class="small" data-plan-cc="${esc(p.name)}" title="Otevře Claude Code ve Windows Terminalu v adresáři projektu">${p.plan ? "Upravit plán v CC" : "Vytvořit plán v CC"}</button></div>
+      ${p.plan ? `<details data-plan="${esc(p.name)}"><summary>Projektový plán</summary><pre class="plan">načítám…</pre></details>` : ""}
       ${prs}${proposalList(proposals.filter(t => t.project === p.name))}
       <details><summary>+ úkol</summary>
         <form data-add="${esc(p.name)}" class="row" style="flex-wrap:wrap">
@@ -592,6 +597,8 @@ function renderProjects(projects, proposals) {
     act("add", {project: f.dataset.add, title: v.title.value, description: v.description.value, done: v.done.value, priority: +v.priority.value});
   });
   $("projects").querySelectorAll("[data-merge]").forEach(b => b.onclick = () => mergePr(b));
+  $("projects").querySelectorAll("[data-plan-cc]").forEach(b => b.onclick = () => planSession(b.dataset.planCc));
+  $("projects").querySelectorAll("details[data-plan]").forEach(d => d.ontoggle = () => loadPlan(d));
   $("projects").querySelectorAll("[data-conflict]").forEach(b => b.onclick = () => settleConflict(b));
   $("projects").querySelectorAll("[data-do=approve]").forEach(b => b.onclick = () => act("approve", {task: b.dataset.task}));
   $("projects").querySelectorAll("[data-do=reject]").forEach(b => b.onclick = () => askReason(b));
@@ -693,6 +700,33 @@ function costLabel(cost, paid) {
   return parts.join(" + ") || "$0.00";
 }
 
+function renderMerges(list) {
+  $("mergeBox").hidden = !list.length;
+  const key = JSON.stringify(list.map(m => m.id));
+  if (key === mergesKey) return;  // keep an opened description open
+  mergesKey = key;
+  $("merges").innerHTML = list.map(m => `<div class="item">
+      <div><b>[${esc(m.project)}]</b> ${m.titles.map(esc).join(" + ")}</div>
+      <details><summary>→ ${esc(m.title)}</summary>${m.why ? `<p class="muted">${esc(m.why)}</p>` : ""}
+        <p>${esc(m.description)}</p>${m.done ? `<p>Hotovo = ${esc(m.done)}</p>` : ""}</details>
+      <div class="row"><button class="primary" data-merge-id="${esc(m.id)}" data-accept="1" title="Nový návrh místo původních, ty se označí jako sloučené">Sloučit</button>
+        <button data-merge-id="${esc(m.id)}" title="Nechat návrhy zvlášť, tahle skupina se už nenabídne">Ignorovat</button></div></div>`).join("");
+  $("merges").querySelectorAll("[data-merge-id]").forEach(b => b.onclick = () => act("merge", {id: b.dataset.mergeId, accept: !!b.dataset.accept}));
+}
+
+async function planSession(name) {
+  const r = await fetch(`/projects/${encodeURIComponent(name)}/plan/session`, {method: "POST"});
+  const data = await r.json().catch(() => ({}));
+  toast(r.ok ? data.message : (data.detail || `chyba ${r.status}`));
+}
+
+async function loadPlan(d) {
+  if (!d.open || d.dataset.loaded) return;
+  const r = await fetch(`/projects/${encodeURIComponent(d.dataset.plan)}/plan`);
+  d.querySelector("pre").textContent = r.ok ? (await r.json()).text : "plán nejde načíst";
+  d.dataset.loaded = "1";
+}
+
 async function refresh() {
   try {
     const o = await (await fetch("/overview")).json();
@@ -701,6 +735,7 @@ async function refresh() {
     renderStatus(o.serve);
     renderPlan(o.serve && o.serve.plan);
     renderQuestions(o.serve ? o.serve.questions : []);
+    renderMerges(o.serve ? o.serve.merges : []);
     renderScope(o.projects);
     renderLimits(o.limits);
     renderRunSub(o.projects);

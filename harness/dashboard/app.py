@@ -15,8 +15,9 @@ from pydantic import BaseModel
 
 from .. import backlog, events, quota, serve, traces
 from ..graph import graph_mermaid, worker_mermaid
-from ..nodes.real import fix_ci_with_agent, resolve_conflict_with_agent
-from ..projects import load_config
+from ..nodes.real import fix_ci_with_agent, read_plan, resolve_conflict_with_agent
+from ..projects import PLAN_FILE, load_config
+from ..sdk import render_prompt
 from ..runner import execute, pending, questions
 from ..simulate import Simulation, prepare
 from .prcare import NoConflict, make_pr_care
@@ -134,6 +135,7 @@ def create_app(home: Path, control: serve.Ctx | None = None, prs=traces.open_prs
             cleanups = dict(zip(cfg.projects, pool.map(care.cleanup_of, paths, [last.get(n) for n in cfg.projects])))
         pulls = {name: care.with_conflicts(cfg.projects[name].path, pulls[name]) for name in cfg.projects}
         projects = [{"name": name, "prs": pulls[name], "cleanup": cleanups[name],
+                     "plan": (cfg.projects[name].path / PLAN_FILE).exists(),
                      "counts": {s: sum(t.project == name and t.status == s for t in tasks) for s in " ~x?-"}}
                     for name in cfg.projects]
         proposals = [asdict(t) for t in tasks if t.status == "~"]
@@ -150,6 +152,23 @@ def create_app(home: Path, control: serve.Ctx | None = None, prs=traces.open_prs
             raise HTTPException(404, f"unknown action {action!r}") from None
         except ValueError as e:
             raise HTTPException(422, str(e)) from None
+
+    @app.get("/projects/{name}/plan")
+    def project_plan(name: str):
+        text = read_plan(_project(name)[1].path)  # the local checkout: shows edits not pushed yet
+        if not text:
+            raise HTTPException(404, f"{name}: no {PLAN_FILE}")
+        return {"text": text}
+
+    @app.post("/projects/{name}/plan/session", dependencies=[Depends(require_local_origin)])
+    def plan_session(name: str):
+        path = _project(name)[1].path
+        prompt = " ".join(render_prompt("plan_session.md").split())  # one line, no ";" (wt splits commands on it)
+        try:
+            subprocess.Popen(["wt", "-d", str(path), "claude", prompt])
+        except OSError as e:
+            raise HTTPException(500, f"Windows Terminal nejde spustit: {e}") from None
+        return {"message": f"Otevírám Claude Code v {path.name}."}
 
     @app.post("/prs/conflict", dependencies=[Depends(require_local_origin)])
     def settle_conflict(req: ConflictRequest):

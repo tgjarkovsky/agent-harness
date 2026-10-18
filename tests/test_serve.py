@@ -1,3 +1,4 @@
+import json
 import time as _time
 from dataclasses import replace
 from datetime import datetime, time, timedelta
@@ -6,7 +7,7 @@ from pathlib import Path
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 
-from harness import events, serve
+from harness import events, lessons, serve
 from harness.backlog import parse
 from harness.projects import Idle, Serve
 from harness.simulate import prepare
@@ -657,3 +658,36 @@ def test_idle_prompt_is_a_scout_whose_findings_land_as_proposals(tmp_path):
     assert env.ctx.state["run"]["status"] == "done"
     [task] = parse(env.sim.backlog_path.read_bytes().decode("utf-8"))
     assert (task.title, task.kind, task.status) == ("Zdroj dat vrac\u00ed 500", "bug", "~")
+
+
+def test_overlapping_proposals_merged_or_ignored(tmp_path):
+    env = Env(tmp_path, "happy-path", auto=False)
+    with env.sim.backlog_path.open("a", encoding="utf-8") as f:
+        f.write("- [~] P2 p-1 [feature] Export do CSV\n  Popis jedna.\n- [~] P2 p-2 [feature] Export do Excelu\n"
+                "- [~] P2 p-3 [feature] Tmavý režim\n- [~] P2 p-4 [feature] Světlý režim\n")
+    asked = []
+    env.ctx.merge = lambda name, props: asked.append([t.id for t in props]) or json.dumps([
+        {"ids": ["p-1", "p-2"], "title": "Export tabulek", "description": "CSV i Excel.", "why": "stejný export",
+         "done": "test exportu"},
+        {"ids": ["p-3", "p-4"], "title": "Přepínač režimu", "description": "Tmavý i světlý."},
+        {"ids": ["p-2", "p-3"], "title": "Překryv"}, {"ids": ["p-1", "nope"], "title": "Neznámé id"}])
+    env.tick()
+    env.tick()
+    assert asked == [["p-1", "p-2", "p-3", "p-4"]]  # same set of proposals → asked once
+    export, mode = serve.snapshot(env.ctx)["merges"]
+    assert export["ids"] == ["p-1", "p-2"] and export["kind"] == "feature" and mode["ids"] == ["p-3", "p-4"]
+
+    assert serve.act(env.ctx, "merge", {"id": export["id"], "accept": True}) == f"Sloučeno do {export['id']}."
+    tasks = {t.id: t for t in parse(env.sim.backlog_path.read_bytes().decode("utf-8"))}
+    new = tasks[export["id"]]
+    assert (new.status, new.kind, new.title) == ("~", "feature", "Export tabulek")
+    assert "CSV i Excel." in new.description and "Hotovo = test exportu" in new.description
+    assert tasks["p-1"].status == tasks["p-2"].status == "-" and tasks["p-1"].note == f"sloučeno do {export['id']}"
+    items, _ = lessons.gather_feedback(env.sim.backlog_path.read_bytes().decode("utf-8"), set(), lambda url: None)
+    assert not {"p-1", "p-2"} & {i["task"] for i in items}  # merged, not rejected: no lesson from them
+
+    assert serve.act(env.ctx, "merge", {"id": mode["id"], "accept": False}) == "Sloučení ignorováno."
+    assert serve.snapshot(env.ctx)["merges"] == [] and env.statuses()["p-3"] == "~"
+    env.tick()  # the merged proposal changed the set: asked again, the ignored group is not offered back
+    assert len(asked) == 2 and [m["ids"] for m in serve.snapshot(env.ctx)["merges"]] == []
+    assert serve.act(env.ctx, "merge", {"id": mode["id"], "accept": True}) == "Návrh sloučení už neplatí."

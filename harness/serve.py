@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import backlog, events, lessons, traces
-from .discover import LENSES, safe_title, task_lines
+from .discover import LENSES, apply_merge, parse_merges, safe_title, task_lines
 from .priority import config_focus, rank
 from .projects import Config, Idle
 from .runner import approvals, execute, questions, resets_at, run_config
@@ -39,7 +39,8 @@ HELP = ("Příkazy:\n/status — stav démona\n/queue — fronta úkolů\n/propo
 def default_state(now: datetime) -> dict:
     return {"paused": False, "run": None, "seq": 0, "offset": 0, "asked": {}, "answers": {}, "approval": None,
             "proposals_sent": [], "lessons_sent": [], "rejected_msgs": {}, "auto_tried": {}, "next_check": 0,
-            "last_scan": None, "last_digest": now.date().isoformat(), "digest_since": now.timestamp()}
+            "last_scan": None,
+            "merge_checked": {}, "merges": [], "merge_ignored": [], "last_digest": now.date().isoformat(), "digest_since": now.timestamp()}
 
 
 def load_state(path: Path, now: datetime) -> dict:
@@ -133,6 +134,7 @@ class Ctx:
     prs: Callable[[Path], list | None] = lambda path: []  # traces.open_prs in the real serve
     merged: Callable[[Path, float], int | None] = lambda path, ts: 0  # traces.merged_since in the real serve
     sh: Callable[[str, Path], tuple[bool, str]] = lambda cmd, cwd: (False, "no shell")  # nodes.real.sh in the real serve
+    merge: Callable[[str, list], str] = lambda name, proposals: "[]"  # nodes.real.real_merge in the real serve
     facts: dict = field(default_factory=dict)  # project → Facts of the last autorun check, for /status
 
 
@@ -380,6 +382,55 @@ def _notify_proposals(ctx: Ctx) -> None:
         if say(ctx, text, [[("✅ Schválit", f"ap:{t.id}"), ("❌ Zamítnout", f"rj:{t.id}")]]) is None:
             return  # Telegram down: retry next tick
         sent.append(t.id)
+
+
+def _maybe_merge_check(ctx: Ctx) -> None:
+    """Whenever a project's set of proposals changes, a cheap agent looks for overlapping ones to merge."""
+    if _quota_reserved(ctx):
+        return
+    tasks = _tasks(ctx)
+    for name in ctx.cfg.projects:
+        props = [t for t in tasks if t.project == name and t.status == "~"]
+        key = ",".join(sorted(t.id for t in props))
+        if len(props) < 2 or ctx.state["merge_checked"].get(name) == key:
+            continue
+        ctx.state["merge_checked"][name] = key  # at the start: a failing agent must not retry every tick
+
+        def job(name=name, props=props) -> None:
+            try:
+                text = ctx.merge(name, props)
+            except Exception as e:  # the check is optional, the next proposal change tries again
+                print(f"merge check {name}: {type(e).__name__}: {e}", file=sys.stderr)
+                return
+            with ctx.lock:
+                known = [t for t in _tasks(ctx) if t.project == name]
+                ignored = ctx.state["merge_ignored"] + [m["ids"] for m in ctx.state["merges"]]
+                ctx.state["merges"] += parse_merges(text, known, ignored)
+        ctx.spawn(job)
+
+
+def _open_merges(ctx: Ctx) -> list[dict]:
+    """Suggestions whose proposals all still wait; the rest went stale (approved, rejected, edited)."""
+    waiting = {t.id for t in _tasks(ctx) if t.status == "~"}
+    ctx.state["merges"] = [m for m in ctx.state["merges"] if set(m["ids"]) <= waiting]
+    return ctx.state["merges"]
+
+
+def _decide_merge(ctx: Ctx, merge_id: str, accept: bool) -> str:
+    merge = next((m for m in _open_merges(ctx) if m["id"] == merge_id), None)
+    if merge is None:
+        return "Návrh sloučení už neplatí."
+    ctx.state["merges"].remove(merge)
+    if not accept:
+        ctx.state["merge_ignored"].append(merge["ids"])
+        return "Sloučení ignorováno."
+
+    def change(text: str) -> tuple[str, str]:
+        known = {t.id: t.status for t in backlog.parse(text)}
+        if merge["id"] in known or any(known.get(i) != "~" for i in merge["ids"]):
+            return text, "Návrh sloučení už neplatí."
+        return apply_merge(text, merge), f"Sloučeno do {merge['id']}."
+    return backlog.edit_with(ctx.backlog_path, change)
 
 
 def _rejected(reason: str) -> str:
@@ -673,7 +724,7 @@ def snapshot(ctx: Ctx) -> dict:
                 "run": run and {**run, "status": "running" if ctx.busy else run["status"]},
                 "questions": [q | {"answered": q["id"] in ctx.state["answers"]}
                               for q in (questions(ctx.app, config) if config else [])],
-                "plan": plans[0] if plans else None,
+                "plan": plans[0] if plans else None, "merges": _open_merges(ctx),
                 "lessons": [x for x in lessons.lessons(ctx.store) if x["status"] != "retired"]}
 
 
@@ -706,6 +757,8 @@ def act(ctx: Ctx, action: str, data: dict) -> str:
                                lenses=_lenses(data.get("lenses")), limits=_limits(data))
         elif action in ("approve", "reject"):
             reply = _decide(ctx, str(data.get("task")), action == "approve", str(data.get("reason") or ""))
+        elif action == "merge":
+            reply = _decide_merge(ctx, str(data.get("id")), bool(data.get("accept")))
         elif action == "lesson":
             reply = _decide_lesson(ctx, f"{data.get('project')}/{data.get('id')}", bool(data.get("approve")))
         elif action == "plan":
@@ -747,6 +800,7 @@ def tick(ctx: Ctx, updates: list[dict]) -> None:
         if not ctx.busy:
             _sync_questions(ctx)
         _notify_proposals(ctx)
+        _maybe_merge_check(ctx)
         _notify_lessons(ctx)
         _maybe_digest(ctx)
     finally:  # the offset too: a handled update must not be delivered again after a failure

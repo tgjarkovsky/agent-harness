@@ -11,6 +11,7 @@ LENSES = ("fix", "feature", "cleanup")  # one discover prompt each: discover_<le
 DEFAULT_LENSES = ("fix", "feature")  # cleanup (whole-repo review) runs only on request
 MAX_PROPOSALS = 5  # per lens
 NEW_PRIORITY = 2
+MERGED_NOTE = "sloučeno do"  # note of a proposal folded into another one; not a rejection
 FENCE_RE = re.compile(r"```(?:json)?\s*(\[.*?\])\s*```", re.DOTALL)
 
 
@@ -144,3 +145,35 @@ def format_plan(plan: list[dict]) -> str:
         if p["why"]:
             rows.append(f"     {p['why']}")
     return "\n".join(rows)
+
+
+def parse_merges(text: str, known: list[Task], ignored: list[list[str]]) -> list[dict]:
+    """Groups of 2+ overlapping [~] proposals, each id in at most one group, ignored groups skipped.
+    `known` = backlog tasks in any status: the merged title must be new, like a discover proposal."""
+    by_id = {t.id: t for t in known if t.status == "~"}
+    used, skip, taken = set(), {frozenset(g) for g in ignored}, {t.id for t in known}
+    out: list[dict] = []
+    for item in json_array(text) or []:
+        ids = list(dict.fromkeys(item.get("ids") or [])) if isinstance(item, dict) else []
+        title = safe_title(item.get("title"))[:100] if isinstance(item, dict) else ""
+        if not title or len(ids) < 2 or not all(i in by_id for i in ids) or used & set(ids) or frozenset(ids) in skip:
+            continue
+        project = by_id[ids[0]].project
+        if proposal_id(project, title) in taken:
+            continue
+        used |= set(ids)
+        kinds = {by_id[i].kind for i in ids}
+        out.append({"id": proposal_id(project, title), "project": project, "ids": ids,
+                    "titles": [by_id[i].title for i in ids], "title": title,
+                    "kind": kinds.pop() if len(kinds) == 1 else "feature",
+                    "description": str(item.get("description") or "").strip(),
+                    "why": _line(item.get("why")), "done": _line(item.get("done")), "accept": ""})
+    return out
+
+
+def apply_merge(text: str, merge: dict) -> str:
+    """The merged proposal as a new [~], its originals [-] with a note the reflection skips."""
+    text = backlog.add_tasks(text, merge["project"], task_lines(merge, "~"))
+    for tid in merge["ids"]:
+        text = backlog.set_status(text, tid, "-", f" — {MERGED_NOTE} {merge['id']}")
+    return text
