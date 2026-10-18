@@ -17,7 +17,7 @@ from . import backlog, events, lessons, quota, serve, trace, traces
 from .graph import build_graph, initial_state
 from .nodes.common import (make_approve, make_discover, make_pick_tasks, make_prioritize, make_reflect,
                            make_report)
-from .nodes.real import git, real_explore, sh, real_nodes, real_rank, real_reflect, worktree_path
+from .nodes.real import git, real_explore, real_merge, sh, real_nodes, real_rank, real_reflect, worktree_path
 from .projects import load_config
 from .priority import config_focus, rank
 from .discover import format_plan, parse_approval
@@ -218,7 +218,8 @@ def cmd_serve(args) -> int:
                     state=serve.load_state(state_path, datetime.now()),
                     spawn=lambda job: threading.Thread(target=job, daemon=True).start(),
                     now=datetime.now, scan=lambda: _scan_into(cfg, backlog_path), state_path=state_path,
-                    store=store, live_quota=quota.fetch, merged=traces.merged_since, sh=sh)
+                    store=store, live_quota=quota.fetch, merged=traces.merged_since, sh=sh,
+                    merge=real_merge(cfg))
     web = create_app(args.home, control=ctx)
     ctx.prs = web.state.prs  # shared cache: conflict rebases and CI fixes run even with no dashboard open
     threading.Thread(target=uvicorn.run, args=(web,), kwargs={"host": "127.0.0.1", "port": args.port},

@@ -11,7 +11,7 @@ from typing import Callable
 from langgraph.config import get_store
 
 from . import backlog
-from .discover import json_array, proposal_id, safe_title, task_lines
+from .discover import MERGED_NOTE, json_array, proposal_id, safe_title, task_lines
 from .traces import pr_urls
 
 LESSONS = "lessons"
@@ -82,6 +82,8 @@ def gather_feedback(text: str, seen: set[str], pr_info: Callable[[str], tuple[st
     items, quiet = [], []
     urls = pr_urls(text)
     for t in backlog.parse(text):
+        if t.status == "-" and t.note.startswith(MERGED_NOTE):
+            continue  # folded into a merged proposal, not rejected
         if t.status in FEEDBACK_KIND:
             key = f"{FEEDBACK_KIND[t.status]}:{t.id}"
             if key not in seen:

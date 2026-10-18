@@ -11,7 +11,7 @@ from .. import lessons, supervisor, traces
 from ..backlog import Task
 from ..guard import check_diff, new_failures
 from ..priority import captures_about
-from ..projects import Config, Project
+from ..projects import PLAN_FILE, Config, Project
 from ..sdk import NO_PUBLISH, READ_TOOLS, WRITE_TOOLS, check_billing, render_prompt, run_agent
 
 
@@ -223,10 +223,27 @@ def real_explore(cfg: Config) -> Callable[[str, list[Task], str], tuple[str, dic
                                verify="\n".join(f"  {c}" for c in p.verify),
                                known="\n".join(f"  [{t.status}] {t.title}" for t in known) or "  (none)",
                                notes=notes or "(none)", lessons=lessons_block(name),
-                               recent=recent_block(p, wt), instructions=p.idle.prompt if p.idle else "")
+                               recent=recent_block(p, wt), instructions=p.idle.prompt if p.idle else "",
+                               plan=read_plan(wt) or "(none)")
         r = run_agent(prompt, cwd=wt, model="opus", tools=READ_TOOLS, permission_mode="dontAsk", max_turns=40)
         return r.text, _agent_out("discover", r)
     return explore
+
+
+def read_plan(root: Path) -> str:
+    plan = root / PLAN_FILE
+    return plan.read_text(encoding="utf-8", errors="replace").strip() if plan.exists() else ""
+
+
+def real_merge(cfg: Config) -> Callable[[str, list[Task]], str]:
+    def merge(name: str, proposals: list[Task]) -> str:
+        rows = "\n".join(json.dumps({"id": t.id, "kind": t.kind, "title": t.title, "description": t.description},
+                                    ensure_ascii=False) for t in proposals)
+        prompt = render_prompt("merge_proposals.md", project=name, proposals=rows,
+                               max_diff_lines=cfg.projects[name].max_diff_lines)
+        return run_agent(prompt, cwd=tempfile.gettempdir(), model="sonnet", tools=[], permission_mode="dontAsk",
+                         max_turns=1).text
+    return merge
 
 
 def real_rank(cands: list[dict], n: int, focus: dict, weights: dict,
