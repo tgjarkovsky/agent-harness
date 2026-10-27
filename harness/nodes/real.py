@@ -172,7 +172,9 @@ def resolve_conflict_with_agent(p: Project, branch: str, billing: str) -> str:
                 raise RuntimeError(f"agent nechal konfliktní značky v: {', '.join(left)}")
         _verify_or_raise(p, wt, "po vyřešení konfliktu")
         git(["add", "-A"], wt)
-        git(["commit", "-q", "--no-edit"], wt)
+        merging = traces.git_run(["rev-parse", "-q", "--verify", "MERGE_HEAD"], wt).returncode == 0
+        if merging or traces.git_run(["diff", "--cached", "--quiet"], wt).returncode != 0:
+            git(["commit", "-q", "--no-edit"], wt)
         git(["push", "-q", "origin", f"HEAD:{branch}"], wt)
         return f"Konflikt vyřešen ({', '.join(files) or traces.CHANGELOG}), verify prošlo, změny pushnuté."
 
