@@ -46,6 +46,18 @@ projects:
     verify: ["npm test", "npx next typegen", "npx tsc --noEmit"]
     # Claude přes MCP produkce doplní kytky s needsSetup (druh, intervaly, nároky); MCP_SECRET z kytky/.env.local
     idle: {cmd: '..\harness\.venv\Scripts\python.exe ..\harness\scripts\kytky_fill.py', every: 24h}
+  faktury:
+    path: ../faktury
+    base: master
+    setup: ["npm ci"]
+    # next typegen: stejný důvod jako u kytek
+    verify: ["npm test", "npx next typegen", "npx tsc --noEmit"]
+  discord-noter:
+    path: ../discord-noter
+    base: master
+    # venv mimo worktree, sdílený úkoly projektu (instalace faster-whisper + pycord z gitu trvá)
+    setup: ['python -m venv ..\_dvenv && ..\_dvenv\Scripts\python -m pip install -q -r requirements.txt pytest']
+    verify: ['..\_dvenv\Scripts\python -X utf8 -m pytest -q']
   # harness upravuje sám sebe (discover, reflexe, ručně); pojistky mimo dosah, merge jen ručně z dashboardu
   harness:
     path: .
