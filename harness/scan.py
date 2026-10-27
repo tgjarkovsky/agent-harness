@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from . import backlog
 from .backlog import Task
+from .discover import safe_title
 from .nodes.real import git
 from .projects import Config, Project
 
@@ -27,7 +28,7 @@ def _proposal(project: str, path: str, line: int, text: str) -> Proposal | None:
         return None
     # id ignores the line number so a proposal survives code moving around it
     title = f"{m[1]}: {m[2].strip()}" if m[2].strip() else f"{m[1]} v {path}"
-    return Proposal(backlog.task_id(project, "todo", f"{path}\0{text.strip()}"), project, path, line, title[:100])
+    return Proposal(backlog.task_id(project, "todo", f"{path}\0{text.strip()}"), project, path, line, safe_title(title)[:100])
 
 
 def scan_project(project: Project) -> list[Proposal]:

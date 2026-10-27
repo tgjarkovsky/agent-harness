@@ -90,6 +90,17 @@ def test_scan_marker_only_at_comment_start(tmp_path):
         ("a.py", "TODO: opravit"), ("b.js", "FIXME: y"), ("c.js", "TODO: z")]
 
 
+def test_scan_title_uses_safe_title_so_rejection_keeps_it(tmp_path):
+    from harness.backlog import set_status
+    repo = make_repo(tmp_path)
+    commit_files(repo, {"a.py": "# TODO: a — b → c\n"})
+    [p] = scan_project(project(repo))
+    assert p.title == "TODO: a – b -> c"
+    text = set_status("## demo\n" + "\n".join(proposal_lines(p)) + "\n", p.id, "-", " — zamítnuto")
+    [t] = parse(text)
+    assert (t.title, t.note) == ("TODO: a – b -> c", "zamítnuto")
+
+
 def test_scan_duplicate_marker_in_one_file_gives_one_proposal(tmp_path):
     repo = make_repo(tmp_path)
     commit_files(repo, {"a.py": "# TODO: fix\nx = 1\n# TODO: fix\n"})
