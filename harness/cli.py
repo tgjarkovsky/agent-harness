@@ -179,12 +179,16 @@ def cmd_go(args) -> int:
     return _run(args, discover=True)
 
 
-def _scan_into(cfg, backlog_path: Path) -> int:
+def _scan_props(cfg, backlog_path: Path, names=None, limit=5, write=True) -> list:
     """Scan outside the backlog lock (git fetch is slow), then append only proposals still unknown."""
-    _, props = scan_all(cfg, backlog.read(backlog_path))
+    _, props = scan_all(cfg, backlog.read(backlog_path), names, limit)
+    if write:
+        backlog.edit(backlog_path, lambda text: backlog.add_new(text, [(p.id, p.project, proposal_lines(p)) for p in props]))
+    return props
 
-    backlog.edit(backlog_path, lambda text: backlog.add_new(text, [(p.id, p.project, proposal_lines(p)) for p in props]))
-    return len(props)
+
+def _scan_into(cfg, backlog_path: Path, names=None, limit=5) -> int:
+    return len(_scan_props(cfg, backlog_path, names, limit))
 
 
 def hide_child_consoles() -> None:
@@ -278,12 +282,11 @@ def cmd_queue(args) -> int:
 
 def cmd_scan(args) -> int:
     cfg = load_config(args.home / "projects.yaml")
-    text = _read_backlog(args.home)
     names = [args.project] if args.project else [n for n, p in cfg.projects.items() if p.discover]
     if unknown := [n for n in names if n not in cfg.projects]:
         print(f"unknown project: {', '.join(unknown)}", file=sys.stderr)
         return 2
-    new_text, props = scan_all(cfg, text, names, args.limit)
+    props = _scan_props(cfg, args.home / "BACKLOG.md", names, args.limit, write=bool(args.write))
     for name in names:
         mine = [p for p in props if p.project == name]
         for p in mine:
@@ -291,7 +294,6 @@ def cmd_scan(args) -> int:
         if not mine:
             print(f"{name}: no new proposals")
     if args.write and props:
-        (args.home / "BACKLOG.md").write_bytes(new_text.encode("utf-8"))
         print(f"{len(props)} proposal(s) written as [~]; change to [ ] to approve")
     return 0
 

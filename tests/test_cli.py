@@ -67,6 +67,23 @@ def test_scan_write_appends_proposals_once(tmp_path, capsys):
     assert main(["--home", str(tmp_path), "scan", "--project", "nope"]) == 2
 
 
+def test_scan_write_keeps_backlog_changes_made_during_scan(tmp_path, monkeypatch):
+    from harness.scan import Proposal
+    (tmp_path / "projects.yaml").write_text("projects:\n  demo: {path: ., base: main, verify: [x]}\n", encoding="utf-8")
+    backlog_path = tmp_path / "BACKLOG.md"
+    backlog_path.write_text("## demo\n- [x] P1 d-1 hotovo\n", encoding="utf-8")
+
+    def slow_scan(cfg, text, names=None, limit=5):
+        backlog_path.write_bytes((text + "- [ ] P1 d-2 ručně přidáno\n").encode("utf-8"))
+        return text, [Proposal("demo-todo-1", "demo", "a.py", 1, "TODO: nový")]
+
+    monkeypatch.setattr("harness.cli.scan_all", slow_scan)
+    assert main(["--home", str(tmp_path), "scan", "--write"]) == 0
+    text = backlog_path.read_text(encoding="utf-8")
+    assert "d-2 ručně přidáno" in text
+    assert text.count("- [~] P3 demo-todo-1 TODO: nový") == 1
+
+
 def test_simulate_asks_unclear_question_in_terminal(tmp_path, capsys, monkeypatch):
     shutil.copytree(ROOT / "scenarios", tmp_path / "scenarios")
     prompts = []
