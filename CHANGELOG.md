@@ -99,3 +99,4 @@
 ## [2026-10-18] - Slučování překrývajících se návrhů (výzva v dashboardu) a projektový plán ROADMAP.md pro feature scouta
 ## [2026-10-27] - Projekty faktury a discord-noter v projects.yaml
 ## [2026-10-27] - Autorun: týdenní utilizace ze SDK se porovnává s týdenním stropem, ne s 5h prahem
+## [2026-10-27] - Řešení konfliktu pushne čistě sloučený main bez prázdného commitu

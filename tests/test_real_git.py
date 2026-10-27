@@ -205,6 +205,30 @@ def test_agent_leaving_markers_or_failing_verify_pushes_nothing(tmp_path, monkey
     assert git(["ls-remote", "origin", "harness/t-1"], repo) == before
 
 
+def test_agent_resolver_pushes_clean_merge(tmp_path, monkeypatch):
+    from harness.nodes import real
+    repo = make_repo(tmp_path)
+
+    def commit(name: str, branch: str) -> None:
+        (repo / name).write_text(name)
+        git(["add", "-A"], repo)
+        git(["commit", "-q", "-m", name], repo)
+        git(["push", "-q", "origin", branch], repo)
+    git(["checkout", "-q", "-b", "harness/t-1"], repo)
+    commit("b.txt", "harness/t-1")
+    git(["checkout", "-q", "main"], repo)
+    commit("c.txt", "main")
+
+    def agent(*a, **kw):
+        raise AssertionError("agent se nemá volat")
+    monkeypatch.setattr(real, "run_agent", agent)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    p = Project("demo", repo, "main", (), ("python -c pass",), (), 3, 800)
+    assert real.resolve_conflict_with_agent(p, "harness/t-1", "subscription")
+    git(["fetch", "-q", "origin"], repo)
+    git(["merge-base", "--is-ancestor", "origin/main", "origin/harness/t-1"], repo)
+
+
 def _ci_fixer(tmp_path, monkeypatch, write: bool, verify: str = "python -c pass"):
     from harness import traces
     from harness.nodes import real
