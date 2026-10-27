@@ -354,6 +354,16 @@ def test_status_and_help(tmp_path):
     assert "/status" in help_text
 
 
+def test_status_shows_limits_while_paused(tmp_path):
+    env = Env(tmp_path, "happy-path")
+    env.tick(env.msg("/pause"))
+    env.tick(env.msg("/status"))
+    status = env.bot.texts()[-1]
+    assert "Autorun: vypnutý" in status
+    for name in env.ctx.cfg.projects:
+        assert f"{name}: fronta " in status and f", PR 0/{serve.MAX_OPEN_PRS}" in status
+
+
 def test_daily_scan_once(tmp_path):
     env = Env(tmp_path, "happy-path", scan=lambda: env.scans.append(1) or 0)
     env.tick()

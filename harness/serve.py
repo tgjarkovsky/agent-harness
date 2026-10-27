@@ -629,6 +629,7 @@ def _status(ctx: Ctx) -> str:
     lines.append(f"Fronta: {len(rank(tasks, set(ctx.cfg.projects)))} · návrhy: {sum(t.status == '~' for t in tasks)}"
                  f" · Dotazy: {sum(1 for i in ctx.state['asked'] if i not in ctx.state['answers'])}")
     now = ctx.now().timestamp()
+    ctx.facts = ctx.facts or _gather_facts(ctx)  # autorun fills it only while it is active
     lines += [why_idle(p, f, now) for p, f in ctx.facts.items()]
     return "\n".join(lines)
 
