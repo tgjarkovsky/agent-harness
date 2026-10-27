@@ -381,6 +381,23 @@ def test_quota_threshold_holds_auto_start_until_reset(tmp_path):
     assert env.statuses() == {"sim-01": "x"}
 
 
+def _sdk_weekly(tmp_path, utilization):
+    env = Env(tmp_path, "happy-path")
+    events.log(env.ctx.conn, "earlier", "end", node="implement", simulated=True,
+               rate_limit={"type": "seven_day", "utilization": utilization,
+                           "resets_at": (NIGHT + timedelta(days=3)).timestamp()})
+    env.tick()
+    return env
+
+
+def test_sdk_weekly_utilization_uses_weekly_cap(tmp_path):
+    assert _sdk_weekly(tmp_path, 0.75).statuses() == {"sim-01": "x"}  # 75 % weekly is under the weekly cap
+
+
+def test_sdk_weekly_utilization_over_cap_holds_start(tmp_path):
+    assert _sdk_weekly(tmp_path, 0.9).statuses() == {"sim-01": " "}
+
+
 def test_live_quota_overrides_stale_sdk_utilization(tmp_path):
     env = Env(tmp_path, "happy-path")
     reset = (NIGHT + timedelta(hours=2)).timestamp()
