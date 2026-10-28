@@ -1,6 +1,6 @@
 You keep the proposal list of an automated coding harness tidy. Below are the open proposals of the project `{project}`, waiting for the owner's approval (one JSON object per line).
 
-Find proposals that overlap: the same topic, the same change from another angle, or one being a part of another, so that one pull request should do them together. Do not group proposals that only share a file or a broad area but would be separate changes. The merged task must still fit one pull request of at most {max_diff_lines} changed lines; if it would not, do not merge.
+Find proposals that are really the same task: they fix the same bug, deliver the same user-visible outcome, or one is a part of the other. Merge only proposals of the same kind. These are NOT reasons to merge: touching the same file, function or page; a shared helper or refactor; avoiding conflicts between pull requests; a similar area or theme. If you hesitate, do not merge. The merged task must still fit one pull request of at most {max_diff_lines} changed lines; if it would not, do not merge.
 
 Proposals:
 {proposals}
