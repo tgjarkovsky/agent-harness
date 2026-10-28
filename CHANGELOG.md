@@ -98,4 +98,7 @@
 ## [2026-10-13] - Péče o PR (rebase, CI, konflikty) z create_app do dashboard/prcare.py
 ## [2026-10-18] - Slučování překrývajících se návrhů (výzva v dashboardu) a projektový plán ROADMAP.md pro feature scouta
 ## [2026-10-27] - Projekty faktury a discord-noter v projects.yaml
+## [2026-10-27] - Autorun: týdenní utilizace ze SDK se porovnává s týdenním stropem, ne s 5h prahem
+## [2026-10-27] - Řešení konfliktu pushne čistě sloučený main bez prázdného commitu
+## [2026-10-27] - /status a dashboard ukážou limity projektů i při vypnutém autorunu
 ## [2026-10-28] - Slučování návrhů: jen stejný typ a stejný výsledek, sdílený soubor nestačí

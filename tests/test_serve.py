@@ -355,6 +355,16 @@ def test_status_and_help(tmp_path):
     assert "/status" in help_text
 
 
+def test_status_shows_limits_while_paused(tmp_path):
+    env = Env(tmp_path, "happy-path")
+    env.tick(env.msg("/pause"))
+    env.tick(env.msg("/status"))
+    status = env.bot.texts()[-1]
+    assert "Autorun: vypnutý" in status
+    for name in env.ctx.cfg.projects:
+        assert f"{name}: fronta " in status and f", PR 0/{serve.MAX_OPEN_PRS}" in status
+
+
 def test_daily_scan_once(tmp_path):
     env = Env(tmp_path, "happy-path", scan=lambda: env.scans.append(1) or 0)
     env.tick()
@@ -380,6 +390,23 @@ def test_quota_threshold_holds_auto_start_until_reset(tmp_path):
     env.clock[0] = NIGHT + timedelta(hours=2, minutes=1)
     env.tick()
     assert env.statuses() == {"sim-01": "x"}
+
+
+def _sdk_weekly(tmp_path, utilization):
+    env = Env(tmp_path, "happy-path")
+    events.log(env.ctx.conn, "earlier", "end", node="implement", simulated=True,
+               rate_limit={"type": "seven_day", "utilization": utilization,
+                           "resets_at": (NIGHT + timedelta(days=3)).timestamp()})
+    env.tick()
+    return env
+
+
+def test_sdk_weekly_utilization_uses_weekly_cap(tmp_path):
+    assert _sdk_weekly(tmp_path, 0.75).statuses() == {"sim-01": "x"}  # 75 % weekly is under the weekly cap
+
+
+def test_sdk_weekly_utilization_over_cap_holds_start(tmp_path):
+    assert _sdk_weekly(tmp_path, 0.9).statuses() == {"sim-01": " "}
 
 
 def test_live_quota_overrides_stale_sdk_utilization(tmp_path):

@@ -206,9 +206,10 @@ def _quota_reserved(ctx: Ctx) -> bool:
     now = ctx.now().timestamp()
     live = ctx.live_quota() or {}
     # live endpoint first: the SDK reports utilization only near the limit, so its last value may be stale
-    five = live.get("five_hour") or events.latest_utilization(ctx.conn, ctx.simulated)
+    five = live.get("five_hour") or events.latest_utilization(ctx.conn, ctx.simulated, types=("five_hour", None))
+    week = live.get("seven_day") or events.latest_utilization(ctx.conn, ctx.simulated, types=("seven_day",))
     return _over(five, min(ctx.cfg.quota_threshold, AUTORUN_QUOTA_CAP), now, 5 * 3600) \
-        or _over(live.get("seven_day"), AUTORUN_QUOTA_CAP, now, 7 * 86400)
+        or _over(week, AUTORUN_QUOTA_CAP, now, 7 * 86400)
 
 
 def _only(ctx: Ctx, projects) -> list[str] | None:
@@ -628,6 +629,7 @@ def _status(ctx: Ctx) -> str:
     lines.append(f"Fronta: {len(rank(tasks, set(ctx.cfg.projects)))} · návrhy: {sum(t.status == '~' for t in tasks)}"
                  f" · Dotazy: {sum(1 for i in ctx.state['asked'] if i not in ctx.state['answers'])}")
     now = ctx.now().timestamp()
+    ctx.facts = ctx.facts or _gather_facts(ctx)  # autorun fills it only while it is active
     lines += [why_idle(p, f, now) for p, f in ctx.facts.items()]
     return "\n".join(lines)
 
