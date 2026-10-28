@@ -9,6 +9,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from harness import events, lessons, serve
 from harness.backlog import parse
+from harness.discover import parse_merges
 from harness.projects import Idle, Serve
 from harness.simulate import prepare
 from harness.telegram import TelegramError
@@ -691,3 +692,10 @@ def test_overlapping_proposals_merged_or_ignored(tmp_path):
     env.tick()  # the merged proposal changed the set: asked again, the ignored group is not offered back
     assert len(asked) == 2 and [m["ids"] for m in serve.snapshot(env.ctx)["merges"]] == []
     assert serve.act(env.ctx, "merge", {"id": mode["id"], "accept": True}) == "Návrh sloučení už neplatí."
+
+
+def test_merge_of_different_kinds_is_dropped():
+    known = parse("## a\n- [~] P2 p-1 [bug] Pád exportu\n- [~] P2 p-2 [refactor] Export: jeden helper\n"
+                  "- [~] P2 p-3 [bug] Export bez diakritiky\n")
+    text = json.dumps([{"ids": ["p-1", "p-2"], "title": "Smíšené"}, {"ids": ["p-1", "p-3"], "title": "Chyby exportu"}])
+    assert [m["ids"] for m in parse_merges(text, known, [])] == [["p-1", "p-3"]]

@@ -158,14 +158,15 @@ def parse_merges(text: str, known: list[Task], ignored: list[list[str]]) -> list
         title = safe_title(item.get("title"))[:100] if isinstance(item, dict) else ""
         if not title or len(ids) < 2 or not all(i in by_id for i in ids) or used & set(ids) or frozenset(ids) in skip:
             continue
+        kinds = {by_id[i].kind for i in ids}
+        if len(kinds) > 1:  # a bug and a refactor are separate changes, even in the same file
+            continue
         project = by_id[ids[0]].project
         if proposal_id(project, title) in taken:
             continue
         used |= set(ids)
-        kinds = {by_id[i].kind for i in ids}
         out.append({"id": proposal_id(project, title), "project": project, "ids": ids,
-                    "titles": [by_id[i].title for i in ids], "title": title,
-                    "kind": kinds.pop() if len(kinds) == 1 else "feature",
+                    "titles": [by_id[i].title for i in ids], "title": title, "kind": kinds.pop(),
                     "description": str(item.get("description") or "").strip(),
                     "why": _line(item.get("why")), "done": _line(item.get("done")), "accept": ""})
     return out

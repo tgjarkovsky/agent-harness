@@ -98,3 +98,4 @@
 ## [2026-10-13] - Péče o PR (rebase, CI, konflikty) z create_app do dashboard/prcare.py
 ## [2026-10-18] - Slučování překrývajících se návrhů (výzva v dashboardu) a projektový plán ROADMAP.md pro feature scouta
 ## [2026-10-27] - Projekty faktury a discord-noter v projects.yaml
+## [2026-10-28] - Slučování návrhů: jen stejný typ a stejný výsledek, sdílený soubor nestačí
