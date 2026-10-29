@@ -543,15 +543,13 @@ def _decide_lesson(ctx: Ctx, ref: str, approve: bool) -> str:
 
 # --- digest -----------------------------------------------------------------------------------------------
 
-def digest_text(conn, since: float, backlog_text: str, simulated: bool = False, until: float = float("inf")) -> str:
+def _digest_tally(evs) -> dict:
     runs, tokens, cost, paid = set(), 0, 0.0, 0.0
     tasks: dict[str, dict] = defaultdict(dict)
-    idle: list[str] = []
-    for e in events.since(conn, since, simulated, until):
+    idle: list[dict] = []
+    for e in evs:
         if e["node"] == "idle":
-            d = e["delta"] or {}
-            fail = (d.get("last_failure") or "").replace("\n", " ")[-150:]
-            idle.append(f"⚙️ {e['worker']} `{d.get('cmd')}` — " + ("ok" if d.get("outcome") == "ok" else f"selhalo: {fail}"))
+            idle.append(e)
             continue
         runs.add(e["run_id"])
         for u in e["usage"] or []:
@@ -563,23 +561,34 @@ def digest_text(conn, since: float, backlog_text: str, simulated: bool = False, 
             tasks[e["worker"]].update({k: d[k] for k in ("outcome", "pr_url", "last_failure") if k in d})
             if e["node"] == "report":
                 tasks[e["worker"]]["reported"] = True
-    lines = [f"📋 Digest — běhů: {len(runs)}"]
-    for task_id, t in tasks.items():
-        outcome = t.get("outcome") or ("failed" if t.get("reported") else None)
-        detail = (t.get("last_failure") or "").replace("\n", " ")[:150]
-        if outcome == "pr_opened":
-            lines.append(f"✅ {task_id} → {t.get('pr_url')}")
-        elif outcome == "needs_clarification":
-            lines.append(f"❓ {task_id} — nejasné: {detail}")
-        elif outcome:
-            lines.append(f"❌ {task_id} — {outcome}: {detail}")
-        else:
-            lines.append(f"⏳ {task_id} — rozpracováno")
-    if not tasks:
-        lines.append("Žádné úkoly.")
-    lines += idle
+    return {"runs": runs, "tokens": tokens, "cost": cost, "paid": paid, "tasks": tasks, "idle": idle}
+
+
+def _task_line(task_id: str, t: dict) -> str:
+    outcome = t.get("outcome") or ("failed" if t.get("reported") else None)
+    detail = (t.get("last_failure") or "").replace("\n", " ")[:150]
+    if outcome == "pr_opened":
+        return f"✅ {task_id} → {t.get('pr_url')}"
+    if outcome == "needs_clarification":
+        return f"❓ {task_id} — nejasné: {detail}"
+    if outcome:
+        return f"❌ {task_id} — {outcome}: {detail}"
+    return f"⏳ {task_id} — rozpracováno"
+
+
+def _idle_line(e: dict) -> str:
+    d = e["delta"] or {}
+    fail = (d.get("last_failure") or "").replace("\n", " ")[-150:]
+    return f"⚙️ {e['worker']} `{d.get('cmd')}` — " + ("ok" if d.get("outcome") == "ok" else f"selhalo: {fail}")
+
+
+def digest_text(conn, since: float, backlog_text: str, simulated: bool = False, until: float = float("inf")) -> str:
+    tally = _digest_tally(events.since(conn, since, simulated, until))
+    lines = [f"📋 Digest — běhů: {len(tally['runs'])}"]
+    lines += [_task_line(task_id, t) for task_id, t in tally["tasks"].items()] or ["Žádné úkoly."]
+    lines += [_idle_line(e) for e in tally["idle"]]
     open_tasks = backlog.parse(backlog_text)
-    lines.append(f"Tokeny: {tokens}, {traces.cost_label(cost, paid)}")
+    lines.append(f"Tokeny: {tally['tokens']}, {traces.cost_label(tally['cost'], tally['paid'])}")
     lines.append(f"Fronta: {sum(t.status == ' ' for t in open_tasks)} · "
                  f"návrhy ke schválení: {sum(t.status == '~' for t in open_tasks)}")
     return "\n".join(lines)
