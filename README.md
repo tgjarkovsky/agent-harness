@@ -91,6 +91,11 @@ projects:
 ```
 
 `cmd` běží ve složce projektu vedle běhů. Výsledek se objeví v digestu a historii a chyba přijde hned do Telegramu. `prompt` je zadání pro read-only scouta. Jeho nálezy se stanou návrhy `[~]` a platí pro ně limit 10 návrhů. `every` se zadává jako `30m`, `24h` nebo `7d`, výchozí hodnota je `24h`.
+S `web: true` smí scout navíc hledat a číst na webu (WebSearch, WebFetch). Harness to používá k týdenní rešerši novinek o agentních harnessech: nové poznatky navrhne zapsat do `docs/poznatky.md` s datem zdroje a technologií a k tomu navrhne doporučení pro sebe.
+
+Skripty pro `cmd` jsou v `scripts/` a zapisují rovnou do produkce daného projektu:
+- `kytky_fill.py` doplní u kytek bez druhu druh a intervaly péče podle fotky (přes MCP kytek),
+- `guth_idle.py` přeloží do angličtiny texty webu guth-pictures, které se v češtině od minula změnily, a doplní texty návrhům stories bez textu podle jejich fotek. Původní anglický obsah uloží do `content:en:backup` v KV.
 
 Discover z autorunu nečeká na schválení plánu. Všechny návrhy skončí jako `[~]` a schvalují se jednotlivě. Kvóta (`quota_threshold`) brzdí dál. `/status` u každého projektu ukáže, kde je vůči limitům. Démon dál:
 - dotazy k nejasným úkolům posílá hned, odpovídá se reply na zprávu (po `question_timeout_hours` se dotaz přeskočí),

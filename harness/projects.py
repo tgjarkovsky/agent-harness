@@ -19,6 +19,7 @@ class Idle:
     cmd: str | None
     prompt: str | None
     every: int  # seconds
+    web: bool = False  # the scout may also search and read the web (WebSearch, WebFetch)
 
 
 @dataclass(frozen=True)
@@ -114,4 +115,4 @@ def _idle(name: str, raw: dict) -> Idle:
     m = EVERY_RE.match(str(raw.get("every", "24h")))
     if not m or int(m[1]) == 0:
         raise ValueError(f"project {name}: idle.every must look like 30m, 24h or 7d, got {raw.get('every')!r}")
-    return Idle(raw.get("cmd"), raw.get("prompt"), int(m[1]) * UNIT[m[2]])
+    return Idle(raw.get("cmd"), raw.get("prompt"), int(m[1]) * UNIT[m[2]], bool(raw.get("web")))

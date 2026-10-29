@@ -20,11 +20,20 @@ projects:
     setup: ["npm ci"]
     # visual-components.test.tsx padá na main (IntersectionObserver v jsdom) — vyřazeno, ať gate pokrývá zbytek
     verify: ['npx vitest run --exclude "**/visual-components.test.tsx" --exclude "**/node_modules/**"', "npx tsc --noEmit"]
+    # anglické texty webu podle českých z produkce + texty prázdných návrhů stories; KV token z guth-pictures/.env.local
+    idle: {cmd: '..\harness\.venv\Scripts\python.exe ..\harness\scripts\guth_idle.py', every: 24h}
   akano3:
     path: ../akano3
     base: main
     setup: ["npm ci"]
     verify: ["node --test lib/*.test.mjs", "npx tsc --noEmit"]
+    idle:
+      every: 7d
+      prompt: >-
+        Projdi články herní knihovny v app/api/admin/seed-wiki/route.ts. Hledej mrtvé interní odkazy, články,
+        na které nic neodkazuje, rozpory v lore mezi články (data, jména, stupně Kaichi) a porušení pravidel
+        z docs/styl-knihovny.md, která node scripts/wiki-styl.mjs nezachytí. Každý nález navrhni jako opravu
+        konkrétních článků.
   secondbrain:
     path: ../secondbrain
     base: main
@@ -67,3 +76,21 @@ projects:
     verify: ['..\_hvenv\Scripts\python -m pytest -q']
     # guard (diff filtr), sdk (NO_PUBLISH), quota (OAuth token), tahle konfigurace
     allowed: ["!harness/guard.py", "!harness/sdk.py", "!harness/quota.py", "!projects.yaml"]
+    # týdenní rešerše novinek o agentních harnessech: poznatky do docs/poznatky.md a z nich doporučení, obojí přes [~]
+    idle:
+      every: 7d
+      web: true
+      prompt: >-
+        Vyhledej na webu nejnovější poznatky o stavbě agentních harnessů a jejich optimalizaci: orchestrace
+        a plánování úkolů, struktura promptů a kontextu, ověřování práce agentů (verify, evaly), paralelní běh
+        ve worktree, úspora tokenů a kvóty (prompt caching, volba modelu), spolehlivost dlouho běžících démonů.
+        Přednost mají technologie, na kterých harness stojí (Claude Agent SDK, Claude Code, LangGraph, FastAPI),
+        a zdroje z posledních 6 měsíců: oficiální dokumentace, changelogy, engineering blogy, ověřené zkušenosti.
+        Ke každému poznatku zjisti datum zveřejnění, technologii a verzi, které se týká, a odkaz na zdroj.
+        Přeskoč poznatky, které už jsou v docs/poznatky.md.
+        Nejdřív navrhni úkol kind=docs „Poznatky <dnešní datum>“: doplnit nové poznatky do docs/poznatky.md
+        (soubor založ, když chybí). Jeden řádek tabulky na poznatek: datum zdroje, technologie (verze), shrnutí
+        jednou větou, odkaz. Poznatky starší než 12 měsíců označ jako zastaralé. Implementátor web nemá, takže
+        description musí obsahovat celé řádky tabulky. Pak navrhni doporučení pro harness samotný: co v jeho kódu
+        nebo promptech změnit podle poznatků. U každého uveď, ze kterého poznatku vychází (zdroj a datum).
+        Doporučení nesmí vyžadovat změny v harness/guard.py, harness/sdk.py, harness/quota.py ani projects.yaml.
