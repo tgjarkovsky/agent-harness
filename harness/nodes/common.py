@@ -8,7 +8,7 @@ from .. import backlog, lessons
 from ..backlog import Task
 from ..discover import DEFAULT_LENSES, apply_approval, candidates, fallback_plan, json_array, parse_proposals, parse_ranking
 from ..graph import RateLimited
-from ..priority import config_focus, pick_batch, rank
+from ..priority import config_focus, config_weights, pick_batch, rank_by_config
 from ..projects import Config
 
 # parallel workers report into the same BACKLOG.md (read-modify-write); re-exported for existing importers
@@ -16,8 +16,6 @@ edit_backlog = backlog.edit
 
 
 def make_pick_tasks(backlog_path: Path, cfg: Config):
-    weights = {name: p.weight for name, p in cfg.projects.items()}
-
     def pick_tasks(state: dict) -> dict:
         left = state.get("max_tasks", cfg.max_tasks_per_run) - state.get("tasks_done", 0)
         if left <= 0 or (state.get("quota") or 0) >= state.get("quota_threshold", cfg.quota_threshold):
@@ -26,7 +24,7 @@ def make_pick_tasks(backlog_path: Path, cfg: Config):
             tasks = backlog.parse(backlog.read(backlog_path))
         planned = state.get("planned")
         if planned is None:
-            ranked = rank(tasks, set(state.get("only") or cfg.projects), config_focus(cfg), weights)
+            ranked = rank_by_config(tasks, cfg, state.get("only"))
         else:
             order = {tid: i for i, tid in enumerate(planned)}
             ranked = sorted((t for t in tasks if t.status == " " and t.id in order), key=lambda t: order[t.id])
@@ -96,7 +94,7 @@ def _as_tasks(proposals: list[dict]) -> list[Task]:
 
 def make_prioritize(backlog_path: Path, cfg: Config,
                     rank_fn: Callable[[list[dict], int, dict, dict], tuple[str, dict]]):
-    weights = {name: p.weight for name, p in cfg.projects.items()}
+    weights = config_weights(cfg)
 
     def prioritize(state: dict) -> dict:
         with backlog.LOCK:

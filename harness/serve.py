@@ -14,7 +14,7 @@ from typing import Callable
 
 from . import backlog, events, lessons, traces
 from .discover import LENSES, apply_merge, parse_merges, safe_title, task_lines
-from .priority import config_focus, rank
+from .priority import rank, rank_by_config
 from .projects import Config, Idle
 from .runner import approvals, execute, questions, resets_at, run_config
 from .telegram import Buttons, TelegramError
@@ -635,8 +635,7 @@ def _status(ctx: Ctx) -> str:
 
 
 def _queue(ctx: Ctx) -> str:
-    ranked = rank(_tasks(ctx), set(ctx.cfg.projects), config_focus(ctx.cfg),
-                  {n: p.weight for n, p in ctx.cfg.projects.items()})
+    ranked = rank_by_config(_tasks(ctx), ctx.cfg)
     if not ranked:
         return "Fronta je prázdná."
     return "\n".join(f"{i}. P{t.priority} {t.id} [{t.project}] {t.title}" for i, t in enumerate(ranked[:10], 1))
