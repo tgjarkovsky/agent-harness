@@ -31,13 +31,13 @@ CHECK_EVERY = 5 * 60  # gh is asked about PRs at most this often
 AUTORUN_QUOTA_CAP = 0.85  # no automatic start while the 5h or weekly window is at or above this
 TASK_USAGE = "/task <projekt> <titulek> — přidat úkol (další řádky = popis)"
 HELP = ("Příkazy:\n/status — stav démona\n/queue — fronta úkolů\n/proposals — znovu poslat návrhy ke schválení\n"
-        "/run — spustit běh hned\n/pause, /resume — vypnout/zapnout autorun\n/digest — přehled teď\n"
+        "/run — spustit běh hned\n/pause, /resume [projekt] — vypnout/zapnout autorun (celý nebo jen projekt)\n/digest — přehled teď\n"
         f"{TASK_USAGE}\n\n"
         "Na dotaz k nejasnému úkolu odpověz reply na jeho zprávu.")
 
 
 def default_state(now: datetime) -> dict:
-    return {"paused": False, "run": None, "seq": 0, "offset": 0, "asked": {}, "answers": {}, "approval": None,
+    return {"paused": False, "paused_projects": [], "run": None, "seq": 0, "offset": 0, "asked": {}, "answers": {}, "approval": None,
             "proposals_sent": [], "lessons_sent": [], "rejected_msgs": {}, "auto_tried": {}, "next_check": 0,
             "last_scan": None,
             "merge_checked": {}, "merges": [], "merge_ignored": [], "last_digest": now.date().isoformat(), "digest_since": now.timestamp()}
@@ -99,7 +99,7 @@ def next_job(facts: dict[str, Facts], now: float, max_tasks: int, tried: dict) -
     return next(({"kind": "idle", "only": [p]} for p, f in facts.items() if _idle_due(p, f, now, tried)), None)
 
 
-def why_idle(p: str, f: Facts, now: float) -> str:
+def why_idle(p: str, f: Facts, now: float, paused: bool = False) -> str:
     """One /status line: the limits of a project as autorun sees them."""
     prs = "?" if f.open_prs is None else f.open_prs
     line = f"{p}: fronta {f.queued}, PR {prs}/{MAX_OPEN_PRS}"
@@ -107,7 +107,7 @@ def why_idle(p: str, f: Facts, now: float) -> str:
         line += f", návrhy {f.proposals}/{MAX_PROPOSALS}"
         cleanup = "nikdy" if f.last_cleanup is None else f"před {int((now - f.last_cleanup) // 86400)} d"
         line += f", cleanup {cleanup}"
-    return line
+    return line + (" ⏸ pozastaveno" if paused else "")
 
 
 @dataclass
@@ -287,7 +287,8 @@ def _autorun(ctx: Ctx) -> None:
         return
     ctx.state["next_check"] = now + CHECK_EVERY
     ctx.facts = _gather_facts(ctx)
-    job = next_job(ctx.facts, now, ctx.cfg.max_tasks_per_run, ctx.state["auto_tried"])
+    active = {p: f for p, f in ctx.facts.items() if p not in ctx.state["paused_projects"]}
+    job = next_job(active, now, ctx.cfg.max_tasks_per_run, ctx.state["auto_tried"])
     if job is None:
         return
     if job["kind"] == "queue":
@@ -630,7 +631,7 @@ def _status(ctx: Ctx) -> str:
                  f" · Dotazy: {sum(1 for i in ctx.state['asked'] if i not in ctx.state['answers'])}")
     now = ctx.now().timestamp()
     ctx.facts = ctx.facts or _gather_facts(ctx)  # autorun fills it only while it is active
-    lines += [why_idle(p, f, now) for p, f in ctx.facts.items()]
+    lines += [why_idle(p, f, now, p in ctx.state["paused_projects"]) for p, f in ctx.facts.items()]
     return "\n".join(lines)
 
 
@@ -642,7 +643,17 @@ def _queue(ctx: Ctx) -> str:
     return "\n".join(f"{i}. P{t.priority} {t.id} [{t.project}] {t.title}" for i, t in enumerate(ranked[:10], 1))
 
 
-def _command(ctx: Ctx, cmd: str) -> str:
+def _pause_project(ctx: Ctx, name: str, pause: bool) -> str:
+    if name not in ctx.cfg.projects:
+        return f"Neznámý projekt: {name}. Známé: {', '.join(ctx.cfg.projects)}"
+    paused = [p for p in ctx.state["paused_projects"] if p != name]
+    ctx.state["paused_projects"] = paused + [name] if pause else paused
+    if not pause:
+        ctx.state["next_check"] = 0
+    return f"⏸ Autorun pro {name} vypnut." if pause else f"▶️ Autorun pro {name} zapnut."
+
+
+def _command(ctx: Ctx, cmd: str, arg: str = "") -> str:
     if cmd == "status":
         return _status(ctx)
     if cmd == "queue":
@@ -653,6 +664,8 @@ def _command(ctx: Ctx, cmd: str) -> str:
         return f"Posílám {len(pending)} návrh(ů)." if pending else "Žádné návrhy ke schválení."
     if cmd == "run":
         return _start_new(ctx)
+    if cmd in ("pause", "resume") and arg:
+        return _pause_project(ctx, arg, cmd == "pause")
     if cmd == "pause":
         ctx.state["paused"] = True
         return "⏸ Autorun vypnut. Běžící běh doběhne."
@@ -699,7 +712,7 @@ def handle(ctx: Ctx, update: dict) -> None:
         return
     if text.startswith("/"):
         cmd = text.split()[0][1:].split("@")[0].lower()
-        reply = _task_cmd(ctx, text) if cmd == "task" else _command(ctx, cmd)
+        reply = _task_cmd(ctx, text) if cmd == "task" else _command(ctx, cmd, " ".join(text.split()[1:]))
     else:
         reply = _answer(ctx, msg, text)
     if reply:
@@ -722,7 +735,7 @@ def snapshot(ctx: Ctx) -> dict:
         run, config = ctx.state["run"], _open(ctx)
         plans = approvals(ctx.app, config) if config and not ctx.state["approval"] else []
         now = ctx.now().timestamp()
-        return {"paused": ctx.state["paused"], "limits": [why_idle(p, f, now) for p, f in ctx.facts.items()],
+        return {"paused": ctx.state["paused"], "limits": [why_idle(p, f, now, p in ctx.state["paused_projects"]) for p, f in ctx.facts.items()],
                 "run": run and {**run, "status": "running" if ctx.busy else run["status"]},
                 "questions": [q | {"answered": q["id"] in ctx.state["answers"]}
                               for q in (questions(ctx.app, config) if config else [])],
@@ -772,7 +785,7 @@ def act(ctx: Ctx, action: str, data: dict) -> str:
         elif action == "edit":
             reply = _edit_task(ctx, str(data.get("task")), *_task_fields(data), bool(data.get("approve")))
         elif action in ("pause", "resume"):
-            reply = _command(ctx, action)
+            reply = _command(ctx, action, str(data.get("project") or ""))
         else:
             raise KeyError(action)
         if action in ("plan", "answer") and not ctx.busy:
