@@ -467,6 +467,15 @@ def _decide(ctx: Ctx, task_id: str, approve: bool, reason: str = "") -> str:
     return backlog.edit_with(ctx.backlog_path, change)
 
 
+def _unqueue(ctx: Ctx, task_id: str) -> str:
+    def change(text: str) -> tuple[str, str]:
+        t = _find(text, task_id)
+        if t is None or t.status != " ":
+            raise ValueError("už vyřízeno")  # raised before edit_with writes anything
+        return backlog.set_status(text, task_id, "~"), "vráceno do návrhů"
+    return backlog.edit_with(ctx.backlog_path, change)
+
+
 def _reason(ctx: Ctx, task_id: str, reason: str) -> str:
     """A reason sent after the rejection (Telegram reply); the reflection reads it from the task's note."""
     def change(text: str) -> str:
@@ -759,6 +768,8 @@ def act(ctx: Ctx, action: str, data: dict) -> str:
                                lenses=_lenses(data.get("lenses")), limits=_limits(data))
         elif action in ("approve", "reject"):
             reply = _decide(ctx, str(data.get("task")), action == "approve", str(data.get("reason") or ""))
+        elif action == "unqueue":
+            reply = _unqueue(ctx, str(data.get("task")))
         elif action == "merge":
             reply = _decide_merge(ctx, str(data.get("id")), bool(data.get("accept")))
         elif action == "lesson":

@@ -552,6 +552,14 @@ function proposalGroup(heading, props) {
       <button data-task="${esc(t.id)}" data-do="reject" title="Zamítnout" aria-label="Zamítnout" ${serveOn ? "" : "disabled"}>❌</button></li>`).join("")}</ul>`;
 }
 
+function queueList(queue) {
+  if (!queue.length) return "";
+  return `<details><summary>Fronta (${queue.length})</summary><ul>${queue.map(t => `<li class="prop">
+      <details><summary title="${esc(t.title)}"><span class="muted">P${t.priority}</span> ${esc(t.title)}</summary>
+        ${t.description ? `<p>${esc(t.description)}</p>` : ""}</details>
+      <button data-task="${esc(t.id)}" data-do="unqueue" title="Vrátit do návrhů" ${serveOn ? "" : "disabled"}>↩ zpět do návrhů</button></li>`).join("")}</ul></details>`;
+}
+
 function cleanupInfo(c) {
   if (!c) return `<span class="muted" title="Revize čistoty kódu zatím neproběhla">🧹 bez revize</span>`;
   const days = Math.floor((Date.now() / 1000 - c.ts) / 86400);
@@ -582,6 +590,7 @@ function renderProjects(projects, proposals) {
         ${p.plan ? `<span title="ROADMAP.md: podle něj scout navrhuje features">📘 plán</span>` : `<span class="muted" title="Bez ROADMAP.md navrhuje scout features bez směru">📘 bez plánu</span>`}
         <button class="small" data-plan-cc="${esc(p.name)}" title="Otevře Claude Code ve Windows Terminalu v adresáři projektu">${p.plan ? "Upravit plán v CC" : "Vytvořit plán v CC"}</button></div>
       ${p.plan ? `<details data-plan="${esc(p.name)}"><summary>Projektový plán</summary><pre class="plan">načítám…</pre></details>` : ""}
+      ${queueList(p.queue || [])}
       ${prs}${proposalList(proposals.filter(t => t.project === p.name))}
       <details><summary>+ úkol</summary>
         <form data-add="${esc(p.name)}" class="row" style="flex-wrap:wrap">
@@ -600,6 +609,7 @@ function renderProjects(projects, proposals) {
   $("projects").querySelectorAll("[data-plan-cc]").forEach(b => b.onclick = () => planSession(b.dataset.planCc));
   $("projects").querySelectorAll("details[data-plan]").forEach(d => d.ontoggle = () => loadPlan(d));
   $("projects").querySelectorAll("[data-conflict]").forEach(b => b.onclick = () => settleConflict(b));
+  $("projects").querySelectorAll("[data-do=unqueue]").forEach(b => b.onclick = () => act("unqueue", {task: b.dataset.task}));
   $("projects").querySelectorAll("[data-do=approve]").forEach(b => b.onclick = () => act("approve", {task: b.dataset.task}));
   $("projects").querySelectorAll("[data-do=reject]").forEach(b => b.onclick = () => askReason(b));
   $("projects").querySelectorAll("[data-do=edit]").forEach(b => b.onclick = () => editProposal(b, proposals.find(t => t.id === b.dataset.task)));

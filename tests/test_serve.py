@@ -549,6 +549,20 @@ def test_dashboard_answers_question_and_decides_proposal(tmp_path):
         serve.act(env.ctx, "nope", {})
 
 
+def test_dashboard_unqueue_returns_queued_task_to_proposals(tmp_path):
+    env = Env(tmp_path, "happy-path", now=NOON)
+    project = next(iter(env.ctx.cfg.projects))
+    env.sim.backlog_path.write_bytes(
+        f"# Backlog\n\n## {project}\n- [ ] P1 u-1 Fronta\n- [x] P2 u-2 Hotovo\n".encode("utf-8"))
+    assert serve.act(env.ctx, "unqueue", {"task": "u-1"}) == "vráceno do návrhů"
+    assert env.statuses() == {"u-1": "~", "u-2": "x"}
+    before = env.sim.backlog_path.read_bytes()
+    for task in ("u-2", "u-1", "nope"):
+        with pytest.raises(ValueError):
+            serve.act(env.ctx, "unqueue", {"task": task})
+    assert env.sim.backlog_path.read_bytes() == before
+
+
 def test_dashboard_pause_resume(tmp_path):
     env = Env(tmp_path, "happy-path", now=NOON)
     serve.act(env.ctx, "pause", {})

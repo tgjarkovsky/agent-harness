@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from .. import backlog, events, quota, serve, traces
 from ..graph import graph_mermaid, worker_mermaid
 from ..nodes.real import fix_ci_with_agent, read_plan, resolve_conflict_with_agent
+from ..priority import config_focus, rank
 from ..projects import PLAN_FILE, load_config
 from ..sdk import render_prompt
 from ..runner import execute, pending, questions
@@ -134,7 +135,9 @@ def create_app(home: Path, control: serve.Ctx | None = None, prs=traces.open_prs
             pulls = dict(zip(cfg.projects, pool.map(care.cached_prs, paths)))
             cleanups = dict(zip(cfg.projects, pool.map(care.cleanup_of, paths, [last.get(n) for n in cfg.projects])))
         pulls = {name: care.with_conflicts(cfg.projects[name].path, pulls[name]) for name in cfg.projects}
+        ranked = rank(tasks, set(cfg.projects), config_focus(cfg), {n: p.weight for n, p in cfg.projects.items()})
         projects = [{"name": name, "prs": pulls[name], "cleanup": cleanups[name],
+                     "queue": [asdict(t) for t in ranked if t.project == name],
                      "plan": (cfg.projects[name].path / PLAN_FILE).exists(),
                      "counts": {s: sum(t.project == name and t.status == s for t in tasks) for s in " ~x?-"}}
                     for name in cfg.projects]
