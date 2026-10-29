@@ -14,6 +14,8 @@ from ..priority import captures_about
 from ..projects import PLAN_FILE, Config, Project
 from ..sdk import NO_PUBLISH, READ_TOOLS, WRITE_TOOLS, check_billing, render_prompt, run_agent
 
+WEB_TOOLS = ["WebSearch", "WebFetch"]
+
 
 def _kill_tree(proc: subprocess.Popen) -> None:
     # subprocess timeout kills only cmd.exe; grandchildren (node/vitest) keep the pipes open forever
@@ -227,7 +229,9 @@ def real_explore(cfg: Config) -> Callable[[str, list[Task], str], tuple[str, dic
                                notes=notes or "(none)", lessons=lessons_block(name),
                                recent=recent_block(p, wt), instructions=p.idle.prompt if p.idle else "",
                                plan=read_plan(wt) or "(none)")
-        r = run_agent(prompt, cwd=wt, model="opus", tools=READ_TOOLS, permission_mode="dontAsk", max_turns=40)
+        web = lens == "idle" and p.idle is not None and p.idle.web
+        r = run_agent(prompt, cwd=wt, model="opus", tools=READ_TOOLS + WEB_TOOLS if web else READ_TOOLS,
+                      permission_mode="dontAsk", max_turns=40)
         return r.text, _agent_out("discover", r)
     return explore
 

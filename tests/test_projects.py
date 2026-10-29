@@ -114,9 +114,11 @@ def test_idle_cmd_or_prompt_with_interval(tmp_path):
     cfg = load_config(write(tmp_path, "projects:\n"
                                       "  a: {path: a, base: main, verify: [x], idle: {cmd: npm run data, every: 30m}}\n"
                                       "  b: {path: b, base: main, verify: [x], idle: {prompt: projdi logy}}\n"
-                                      "  c: {path: c, base: main, verify: [x]}\n"))
+                                      "  c: {path: c, base: main, verify: [x]}\n"
+                                      "  d: {path: d, base: main, verify: [x], idle: {prompt: hledej, web: true}}\n"))
     assert cfg.projects["a"].idle == Idle("npm run data", None, 1800)
     assert cfg.projects["b"].idle == Idle(None, "projdi logy", 86400)
+    assert cfg.projects["d"].idle == Idle(None, "hledej", 86400, web=True)
     assert cfg.projects["c"].idle is None
 
 

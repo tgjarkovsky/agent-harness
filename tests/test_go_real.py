@@ -97,3 +97,16 @@ def test_task_with_accept_skips_planner_until_replan(tmp_path, monkeypatch):
     assert plan(s) == {"plan": desc, "accept": "pytest tests/test_a.py"} and calls == []
     out = plan(s | {"replanned": True, "plan": desc, "last_failure": "boom"})
     assert len(calls) == 1 and out["accept"] == "pytest tests/test_b.py"
+
+
+def test_idle_scout_gets_web_tools_only_when_asked(tmp_path, monkeypatch):
+    from harness.projects import Idle
+    repo = make_repo(tmp_path)
+    p = Project("demo", repo, "main", (), ("npm test",), (), 3, 800, idle=Idle(None, "hledej novinky", 3600, web=True))
+    calls = []
+    monkeypatch.setattr(real, "run_agent", fake_agent(calls))
+    explore = real.real_explore(Config("subscription", 3, 0.7, {"demo": p}))
+    explore("demo", [], "idle")
+    explore("demo", [], "fix")
+    assert calls[0]["tools"] == real.READ_TOOLS + ["WebSearch", "WebFetch"] and "hledej novinky" in calls[0]["prompt"]
+    assert calls[1]["tools"] == real.READ_TOOLS

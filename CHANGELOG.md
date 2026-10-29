@@ -102,3 +102,5 @@
 ## [2026-10-27] - Řešení konfliktu pushne čistě sloučený main bez prázdného commitu
 ## [2026-10-27] - /status a dashboard ukážou limity projektů i při vypnutém autorunu
 ## [2026-10-28] - Slučování návrhů: jen stejný typ a stejný výsledek, sdílený soubor nestačí
+## [2026-10-29] - Idle činnosti: guth-pictures překládá změněné české texty do EN a doplňuje texty stories, akano3 má týdenního scouta herní knihovny
+## [2026-10-29] - idle.web: scout smí na web; harness 1× týdně rešeršuje novinky o harnessech do docs/poznatky.md a navrhuje si z nich doporučení
