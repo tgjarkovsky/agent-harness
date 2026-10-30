@@ -12,7 +12,7 @@
   body { margin:0; min-height:100vh; font:16px/1.45 system-ui, sans-serif; color:var(--text); background:var(--bg); }
   /* left gutter for desktop icons, bottom for the taskbar */
   .wrap { padding:20px 32px 64px 140px; display:grid; gap:14px; grid-template-rows:auto auto auto minmax(0,1fr); }
-  .cols { display:grid; gap:14px; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,.7fr); align-items:start; min-height:0; }
+  .cols { display:grid; gap:14px; grid-template-columns:minmax(0,1fr) 480px; align-items:start; min-height:0; }
   .col { display:grid; gap:12px; min-width:0; align-content:start; }
   /* the wallpaper (Lively) may get no mouse wheel: each column scrolls by its scrollbar or by dragging the content */
   @media (min-width:1101px) {
@@ -99,7 +99,9 @@
         background:hsl(var(--h) 45% 22%); color:hsl(var(--h) 80% 80%); border:1px solid hsl(var(--h) 40% 36%); }
 
   /* inbox */
-  #inbox { display:grid; gap:10px; }
+  /* cards flow into as many ~500px columns as the width allows, so the wide screen is used before anything scrolls */
+  #inbox { column-width:500px; column-gap:12px; }
+  #inbox > .card { break-inside:avoid; margin-bottom:12px; }
   .filters { display:flex; gap:6px; flex-wrap:wrap; margin:-2px 0 10px; }
   .filters button { padding:2px 10px; font-size:13px; border-radius:99px; }
   .filters button[aria-pressed=true] { border-color:var(--accent); color:var(--accent); }
@@ -190,9 +192,6 @@
       <section id="detail" hidden>
         <h2 id="detailHead"></h2>
         <div class="stack"><div id="detailData"></div><div id="detailStatic"></div></div></section>
-    </div>
-
-    <div class="col">
       <section class="chart"><h2>Tokeny (14 dní)</h2><div id="chart"></div><div id="cost" class="muted"></div></section>
       <section id="lessonsBox" hidden><h2>Aktivní lekce</h2><div id="lessons"></div></section>
       <section><details><summary>Historie autorunu</summary><input type="date" id="historyDay"><pre id="history" class="muted"></pre></details></section>
@@ -454,18 +453,24 @@ function mergeItem(m) {
         <button data-a="mergeProp" data-id="${esc(m.id)}" title="Nechat návrhy zvlášť, tahle skupina se už nenabídne">Ignorovat</button></div>`);
 }
 
-function proposalItem(project, props) {
-  const sorted = [...props].sort((a, b) => a.priority - b.priority);
-  const p1 = sorted.filter(t => t.priority === 1).map(t => t.id);
-  return item(5, "prop", project, `p:${project}`, sorted, "",
-    head("◇", project, `<b>${props.length} ${plural(props.length, "návrh", "návrhy", "návrhů")}</b>`,
-      `<span class="spacer"></span>${p1.length ? `<button class="small" data-a="approveAll" data-ids="${esc(p1.join(","))}" ${dis()} title="Schválit všechny návrhy s prioritou P1">Schválit P1 (${p1.length})</button>` : ""}`)
-    + `<ul>${sorted.map(t => `<li class="prop">
-        <details><summary title="${esc(t.title)}"><span class="muted">P${t.priority}</span> ${t.kind ? `<span class="tag">${esc(t.kind)}</span>` : ""}
-          <span class="sens">${esc(t.title)}</span></summary>${t.description ? `<p class="sens">${esc(t.description)}</p>` : ""}</details>
-        <button data-a="approve" data-task="${esc(t.id)}" title="Schválit → fronta" aria-label="Schválit" ${dis()}>✅</button>
-        <button data-a="edit" data-task="${esc(t.id)}" title="Upravit" aria-label="Upravit" ${dis()}>✏️</button>
-        <button data-a="reject" data-task="${esc(t.id)}" title="Zamítnout" aria-label="Zamítnout" ${dis()}>❌</button></li>`).join("")}</ul>`, props.length);
+// proposals split by type across projects; anything that is not a feature or a refactor is a fix
+const propType = t => t.kind === "feature" || t.kind === "refactor" ? t.kind : "fix";
+const PROP_TYPES = [["feature", "Nové features", "＋"], ["fix", "Bugy a opravy", "🔧"], ["refactor", "Úklid kódu", "🧹"]];
+
+function proposalItems(props) {
+  return PROP_TYPES.flatMap(([type, label, icon], i) => {
+    const group = props.filter(t => propType(t) === type).sort((a, b) => a.priority - b.priority || a.project.localeCompare(b.project));
+    if (!group.length) return [];
+    const p1 = group.filter(t => t.priority === 1).map(t => t.id);
+    return [item(5 + i / 10, "prop", "", `p:${type}`, group, "",
+      head(icon, "", `<b>${label}</b>`, `<span class="muted">${group.length}</span><span class="spacer"></span>${p1.length
+        ? `<button class="small" data-a="approveAll" data-ids="${esc(p1.join(","))}" ${dis()} title="Schválit všechny návrhy s prioritou P1">Schválit P1 (${p1.length})</button>` : ""}`)
+      + `<ul>${group.map(t => `<li class="prop"><span class="muted">P${t.priority}</span>${chip(t.project)}
+          <details><summary title="${esc(t.title)}">${type === "fix" && t.kind ? `<span class="tag">${esc(t.kind)}</span> ` : ""}<span class="sens">${esc(t.title)}</span></summary>${t.description ? `<p class="sens">${esc(t.description)}</p>` : ""}</details>
+          <button data-a="approve" data-task="${esc(t.id)}" title="Schválit → fronta" aria-label="Schválit" ${dis()}>✅</button>
+          <button data-a="edit" data-task="${esc(t.id)}" title="Upravit" aria-label="Upravit" ${dis()}>✏️</button>
+          <button data-a="reject" data-task="${esc(t.id)}" title="Zamítnout" aria-label="Zamítnout" ${dis()}>❌</button></li>`).join("")}</ul>`, group.length)];
+  });
 }
 
 function lessonItem(proposed) {
@@ -476,7 +481,7 @@ function lessonItem(proposed) {
         <span class="sens" style="flex:1;min-width:0">${esc(l.text)}</span>${btn(l, 1, "✅", "Platí")}${btn(l, 0, "❌", "Zahodit")}</li>`).join("")}</ul>`, proposed.length);
 }
 
-function inboxItems(o) {
+function inboxItems(o, only = null) {  // `only`: a project the proposals are narrowed to
   const s = o.serve, items = [];
   if (s && s.plan) items.push(planItem(s.plan));
   if (s) for (const q of s.questions.filter(q => !q.answered)) items.push(questionItem(q));
@@ -485,10 +490,7 @@ function inboxItems(o) {
     else if (pr.ci === "ok" && !pr.isDraft && pr.mergeable !== "CONFLICTING") items.push(readyItem(p.name, pr));
   }
   if (s) for (const m of s.merges) items.push(mergeItem(m));
-  for (const p of o.projects) {
-    const props = o.proposals.filter(t => t.project === p.name);
-    if (props.length) items.push(proposalItem(p.name, props));
-  }
+  items.push(...proposalItems(o.proposals.filter(t => !only || t.project === only)));
   const proposed = (s ? s.lessons : []).filter(l => l.status === "proposed");
   if (proposed.length) items.push(lessonItem(proposed));
   return items.sort((a, b) => a.rank - b.rank || a.project.localeCompare(b.project));
@@ -516,8 +518,8 @@ function reconcile(box, items) {
 
 const GROUPS = [["", "Vše"], ["decide", "Rozhodnout"], ["pr", "PR"], ["prop", "Návrhy"], ["lesson", "Lekce"]];
 
-function renderInbox(all) {
-  const shown = all.filter(i => (!typeFilter || i.group === typeFilter) && (!selected || !i.project || i.project === selected));
+function renderInbox(all, view) {
+  const shown = view.filter(i => (!typeFilter || i.group === typeFilter) && (!selected || !i.project || i.project === selected));
   const count = g => all.filter(i => !g || i.group === g).reduce((a, i) => a + i.n, 0);
   $("inboxCount").textContent = count("");
   const fkey = JSON.stringify([GROUPS.map(([g]) => count(g)), typeFilter]);
@@ -569,7 +571,8 @@ function projectRow(p, waiting) {
 
 function renderProjects(o, items) {
   agentResolving = o.projects.some(p => (p.prs || []).some(pr => pr.conflict && pr.conflict.state === "resolving"));
-  const waiting = name => items.filter(i => i.project === name).reduce((a, i) => a + i.n, 0);
+  const waiting = name => items.filter(i => i.project === name).reduce((a, i) => a + i.n, 0)
+    + o.proposals.filter(t => t.project === name).length;
   const sorted = [...o.projects].sort((a, b) => waiting(b.name) - waiting(a.name));
   $("projCount").textContent = o.projects.length;
   const key = JSON.stringify([sorted, sorted.map(p => waiting(p.name)), selected, [...excluded], serveOn]);
@@ -713,8 +716,8 @@ function render(o) {
   renderStatus(o.serve);
   renderLimits(o.limits);
   renderRunSub();
-  const items = inboxItems(o);
-  renderInbox(items);
+  const items = inboxItems(o);  // unfiltered: counts and the per-project badges
+  renderInbox(items, selected ? inboxItems(o, selected) : items);
   renderProjects(o, items);
   renderDetail(o);
   renderLessons(o.serve ? o.serve.lessons : []);
