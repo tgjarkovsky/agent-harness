@@ -106,3 +106,4 @@
 ## [2026-10-29] - idle.web: scout smí na web; harness 1× týdně rešeršuje novinky o harnessech do docs/poznatky.md a navrhuje si z nich doporučení
 ## [2026-10-29] - Dashboard: fronta úkolů u projektu s vrácením do návrhů
 ## [2026-10-30] - Dashboard /desktop: layout inbox + projekty, odstraněn skin Mlékárna
+## [2026-10-30] - Dashboard /desktop: Inbox ve více sloupcích, návrhy rozdělené podle typu, jedna pravá lišta
