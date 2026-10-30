@@ -107,7 +107,7 @@ Discover z autorunu nečeká na schválení plánu. Všechny návrhy skončí ja
 - po restartu naváže na rozběhnutý běh,
 - když běh spadne, vypne automatiku a pošle zprávu (zapne se příkazem `/resume`).
 
-Příkazy: `/status /queue /proposals /run /pause /resume /digest /help`, `/task <projekt> <titulek>` (další řádky = popis úkolu). Updaty z jiného chatu se ignorují.
+Příkazy: `/status /queue /proposals /run /pause /resume /digest /help`, `/pause <projekt>` a `/resume <projekt>` zastaví a obnoví autorun jen pro jeden projekt (ruční `/run` a dashboard ho dál spustí), `/task <projekt> <titulek>` (další řádky = popis úkolu). Updaty z jiného chatu se ignorují.
 
 Nastavení:
 1. Přes [@BotFather](https://t.me/BotFather) založ **nový** bot (`/newbot`). Token secondbrain bota nepoužívej, dva pollery na jednom tokenu si navzájem kradou zprávy.
