@@ -253,7 +253,7 @@ def create_app(home: Path, control: serve.Ctx | None = None, prs=traces.open_prs
 
     @app.get("/costs")
     def costs():
-        return traces.costs(conn)
+        return traces.costs(conn) | {"summary": traces.summary(conn)}
 
     @app.get("/usage")
     def usage():
