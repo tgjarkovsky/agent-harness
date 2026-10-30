@@ -9,89 +9,71 @@
   :root { --bg:#0e0f13; --panel:rgba(27,28,34,.86); --text:#ececf1; --muted:#9a9aa6; --line:#2c2d35; --accent:#8c98ff;
           --ok:#4cc38a; --bad:#ff6b5e; --warn:#f0b75a; --on-accent:#111114; }
   * { box-sizing:border-box; }
-  body { margin:0; min-height:100vh; font:15px/1.45 system-ui, sans-serif; color:var(--text);
-         background:var(--bg); }
+  body { margin:0; min-height:100vh; font:16px/1.45 system-ui, sans-serif; color:var(--text); background:var(--bg); }
   /* left gutter for desktop icons, bottom for the taskbar */
-  .wrap { padding:28px 32px 72px 140px; display:grid; gap:16px; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); align-items:start; }
-  @media (max-width:1100px) { .wrap { grid-template-columns:1fr; padding:16px; } }
-  .col { display:grid; gap:16px; min-width:0; }
-  /* the wallpaper (Lively) may get no mouse wheel: each column scrolls by its scrollbar or by dragging the content;
-     rtl puts the left column's scrollbar on its outer edge instead of mid-screen */
+  .wrap { padding:20px 32px 64px 140px; display:grid; gap:14px; grid-template-rows:auto auto auto minmax(0,1fr); }
+  .cols { display:grid; gap:14px; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,.7fr); align-items:start; min-height:0; }
+  .col { display:grid; gap:12px; min-width:0; align-content:start; }
+  /* the wallpaper (Lively) may get no mouse wheel: each column scrolls by its scrollbar or by dragging the content */
   @media (min-width:1101px) {
-    .wrap { height:100vh; grid-template-rows:auto minmax(0,1fr); }
-    .wrap > .col { max-height:100%; overflow-y:auto; padding-right:6px; scrollbar-color:var(--muted) transparent; }
-    .wrap > .col.left { direction:rtl; padding:0 0 0 6px; }
-    .wrap > .col.left > * { direction:ltr; }
-    .wrap > .col.dragging { cursor:grabbing; user-select:none; }
+    .wrap { height:100vh; }
+    .cols > .col { max-height:100%; overflow-y:auto; padding-right:6px; scrollbar-color:var(--muted) transparent; }
+    .cols > .col.dragging { cursor:grabbing; user-select:none; }
   }
-  header { grid-column:1 / -1; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  @media (max-width:1100px) { .wrap { padding:16px; } .cols { grid-template-columns:1fr; } }
   h1 { font-size:26px; font-weight:700; margin:0 12px 0 0; letter-spacing:-.01em; }
-  h2 { font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 10px; }
-  h3 { font-size:17px; font-weight:650; margin:0; }
+  h2 { font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  h2 .count { color:var(--text); font-size:16px; }
   section { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; backdrop-filter:blur(6px); min-width:0; }
   button { font:inherit; padding:6px 12px; border-radius:7px; border:1px solid var(--line); background:#22232b; color:var(--text); cursor:pointer; }
   button:hover { border-color:var(--accent); }
   button.primary { background:var(--accent); color:var(--on-accent); border-color:var(--accent); font-weight:600; }
+  button.small { padding:2px 9px; font-size:13px; }
   button:disabled { opacity:.45; cursor:default; }
   input[type=number] { font:inherit; width:4em; padding:1px 4px; border-radius:5px; border:1px solid var(--line); background:#15161b; color:var(--text); }
-  input[type=text] { font:inherit; padding:6px 10px; border-radius:7px; border:1px solid var(--line); background:#15161b; color:var(--text); flex:1 1 220px; }
+  input[type=text], input[type=date], select, textarea { font:inherit; padding:6px 10px; border-radius:7px; border:1px solid var(--line); background:#15161b; color:var(--text); }
+  input[type=text] { flex:1 1 220px; }
   a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:underline; }
   .muted { color:var(--muted); }
-  .status { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-  .dot { width:9px; height:9px; border-radius:50%; background:var(--muted); display:inline-block; }
-  .dot.running { background:var(--accent); }
-  .dot.waiting, .dot.approving, .dot.paused { background:var(--warn); }
-  .dot.crashed { background:var(--bad); } .dot.done { background:var(--ok); }
   .spacer { flex:1; }
-  .projects { display:grid; gap:12px; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); }
-  .counts { display:flex; gap:12px; margin:6px 0 10px; font-size:13px; flex-wrap:wrap; }
-  .counts b { font-size:16px; }
-  ul { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:minmax(0,1fr); gap:6px; }
-  h4 { font-size:12px; font-weight:600; color:var(--muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.05em; }
-  li.prop { display:flex; gap:6px; align-items:center; font-size:14px; min-width:0; }
-  li.prop details { flex:1; min-width:0; }
-  li.prop summary { color:var(--text); font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  li.prop button { padding:2px 8px; }
-  li.pr { display:flex; gap:8px; align-items:baseline; font-size:14px; min-width:0; }
-  li.pr a { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
-  li.conflict { font-size:13px; margin:2px 0 8px; padding:4px 8px; border-left:3px solid var(--bad); }
-  li.conflict pre { white-space:pre-wrap; max-height:8em; overflow:auto; font-size:12px; margin:4px 0; }
-  li.conflict .row { margin-top:4px; }
-  li.conflict button { padding:2px 8px; font-size:13px; }
-  .tag { font-size:11px; padding:1px 7px; border-radius:99px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
-  .tag.draft { border-color:var(--warn); color:var(--warn); }
-  .item { border-top:1px solid var(--line); padding:10px 0; display:grid; gap:6px; }
-  .item:first-of-type { border-top:0; padding-top:0; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  details summary { cursor:pointer; color:var(--muted); font-size:13px; }
-  details p { margin:6px 0 0; font-size:13px; white-space:pre-wrap; }
-  .attention { border-color:var(--warn); }
-  pre.plan { white-space:pre-wrap; max-height:24em; overflow:auto; font-size:12px; margin:4px 0; }
+  ul { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:minmax(0,1fr); gap:6px; }
+  details summary { cursor:pointer; color:var(--muted); font-size:14px; }
+  details p { margin:6px 0 0; font-size:14px; white-space:pre-wrap; }
+  pre.plan { white-space:pre-wrap; max-height:24em; overflow:auto; font-size:13px; margin:4px 0; }
+
+  /* header: run status, autorun, quota */
+  .top { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .status { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--muted); display:inline-block; }
+  .dot.running { background:var(--accent); } .dot.waiting, .dot.approving, .dot.paused { background:var(--warn); }
+  .dot.crashed { background:var(--bad); } .dot.done { background:var(--ok); }
+  .why { position:relative; } .why summary { display:inline; }
+  .pop { position:absolute; z-index:5; top:calc(100% + 6px); left:0; min-width:260px; background:#1b1c22; border:1px solid var(--line); border-radius:10px;
+         padding:10px 12px; display:grid; gap:8px; font-size:14px; white-space:pre-wrap; }
+  .quota { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  .qchip { display:inline-flex; gap:8px; align-items:center; font-size:14px; }
+  .qchip .meter { width:110px; margin:0; }
   .meter { height:10px; background:var(--line); border-radius:99px; overflow:hidden; margin:6px 0; }
   .meter > div { height:100%; background:var(--accent); }
   .meter.high > div { background:var(--warn); }
-  .chart svg { width:100%; height:140px; display:block; }
-  .chart rect { fill:var(--accent); opacity:.85; } .chart rect:hover { opacity:1; }
-  .chart text { fill:var(--muted); font-size:10px; }
-  .big { font-size:22px; font-weight:700; }
-  #toast { position:fixed; right:24px; bottom:80px; background:var(--panel); border:1px solid var(--accent); padding:10px 14px; border-radius:10px; opacity:0; transition:opacity .2s; pointer-events:none; }
-  #toast.show { opacity:1; }
-  label.plan { display:flex; gap:8px; align-items:baseline; }
-  #scope { flex-basis:100%; font-size:13px; }
-  label.chip { display:inline-flex; gap:5px; align-items:center; padding:3px 10px; border:1px solid var(--line); border-radius:99px; cursor:pointer; }
-  label.chip:has(input:checked) { border-color:var(--accent); }
-  .tag.ok { border-color:var(--ok); color:var(--ok); } .tag.fail { border-color:var(--bad); color:var(--bad); }
-  li.pr button { padding:1px 8px; font-size:13px; }
-  .actions { display:grid; gap:12px; grid-template-columns:repeat(3, 1fr); }
-  @media (max-width:700px) { .actions { grid-template-columns:1fr; } }
-  button.action { display:grid; gap:4px; text-align:left; padding:14px 16px; border-radius:10px; border-width:2px; }
-  button.action b { font-size:17px; }
+
+  /* actions + run options */
+  .bar { display:flex; gap:12px; align-items:stretch; flex-wrap:wrap; }
+  button.action { display:grid; gap:2px; text-align:left; padding:8px 16px; border-radius:10px; border-width:2px; }
+  button.action b { font-size:16px; }
   button.action span { font-size:13px; color:var(--muted); }
   button.action.primary span { color:inherit; opacity:.75; }
-  button.small { padding:2px 9px; font-size:13px; }
-  .pipe { display:flex; gap:6px; align-items:stretch; flex-wrap:wrap; margin:14px 0 4px; }
-  .stage { flex:1 1 100px; border:1px solid var(--line); border-radius:8px; padding:6px 9px; font-size:13px; transition:opacity .15s; }
-  .stage small { display:block; color:var(--muted); font-size:11px; }
+  .opts { position:relative; align-self:center; }
+  .opts .pop { min-width:300px; }
+  label.chip { display:inline-flex; gap:5px; align-items:center; padding:3px 10px; border:1px solid var(--line); border-radius:99px; cursor:pointer; }
+  label.chip:has(input:checked) { border-color:var(--accent); }
+
+  /* run strip: pipeline + workers */
+  #flow { padding:10px 14px; }
+  .pipe { display:flex; gap:6px; align-items:stretch; flex-wrap:wrap; }
+  .stage { flex:1 1 100px; border:1px solid var(--line); border-radius:8px; padding:4px 9px; font-size:14px; transition:opacity .15s; }
+  .stage small { display:block; color:var(--muted); font-size:12px; }
   .arrow { align-self:center; color:var(--muted); }
   :is(.stage, .node).done { border-color:var(--ok); }
   :is(.stage, .node).active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
@@ -103,191 +85,118 @@
   :is(.stage, .node).error::before { content:"✗ "; color:var(--bad); }
   #flow[data-preview] .stage:not(.on-preview), #flow[data-preview] .arrow, #flow[data-preview] #workers { opacity:.25; }
   #flow[data-preview] .stage.on-preview { border-color:var(--accent); }
-  #flowHint { font-size:13px; min-height:20px; margin-top:6px; }
-  .wrow { display:flex; gap:5px; align-items:center; flex-wrap:wrap; font-size:12px; padding:6px 0; border-top:1px solid var(--line); }
-  .wrow .title { flex:1 1 100%; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #flowHint { font-size:14px; min-height:20px; margin-top:6px; }
+  .wrow { display:flex; gap:5px; align-items:center; flex-wrap:wrap; font-size:13px; padding:6px 0; border-top:1px solid var(--line); margin-top:6px; }
+  .wrow .title { flex:1 1 100%; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .node { border:1px solid var(--line); border-radius:99px; padding:1px 8px; color:var(--muted); }
   .node.done, .node.active, .node.wait, .node.error { color:var(--text); }
-  #subtitle { display:none; }
+
+  /* tags, project chips */
+  .tag { font-size:12px; padding:1px 7px; border-radius:99px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
+  .tag.draft { border-color:var(--warn); color:var(--warn); }
+  .tag.ok { border-color:var(--ok); color:var(--ok); } .tag.fail { border-color:var(--bad); color:var(--bad); } .tag.pending { color:var(--muted); }
+  .pc { font-size:13px; font-weight:600; padding:1px 8px; border-radius:6px; white-space:nowrap;
+        background:hsl(var(--h) 45% 22%); color:hsl(var(--h) 80% 80%); border:1px solid hsl(var(--h) 40% 36%); }
+
+  /* inbox */
+  #inbox { display:grid; gap:10px; }
+  .filters { display:flex; gap:6px; flex-wrap:wrap; margin:-2px 0 10px; }
+  .filters button { padding:2px 10px; font-size:13px; border-radius:99px; }
+  .filters button[aria-pressed=true] { border-color:var(--accent); color:var(--accent); }
+  .card { border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--panel); display:grid; gap:8px; min-width:0; }
+  .card.urgent { border-color:var(--warn); } .card.bad { border-color:var(--bad); }
+  .ch { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .ic { width:22px; height:22px; border-radius:50%; display:inline-grid; place-items:center; font-size:13px; font-weight:700; background:var(--line); flex:none; }
+  .urgent > .ch .ic { background:var(--warn); color:var(--on-accent); } .bad > .ch .ic { background:var(--bad); color:var(--on-accent); }
+  .card .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
+  label.plan { display:flex; gap:8px; align-items:baseline; font-size:15px; }
+  .conflict pre { white-space:pre-wrap; max-height:8em; overflow:auto; font-size:13px; margin:4px 0; }
+  li.prop { display:flex; gap:6px; align-items:center; font-size:15px; min-width:0; }
+  li.prop details { flex:1; min-width:0; }
+  li.prop summary { color:var(--text); font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  li.prop button { padding:2px 8px; }
+
+  /* projects */
+  #projects { display:grid; gap:6px; }
+  .prow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--panel); cursor:pointer; }
+  .prow:hover { border-color:var(--accent); }
+  .prow.sel { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  .prow .name { font-weight:650; flex:1 1 140px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .b { font-size:13px; padding:0 7px; border:1px solid var(--line); border-radius:99px; white-space:nowrap; }
+  .b.dim { color:var(--muted); border-color:transparent; }
+  .b.bad { border-color:var(--bad); color:var(--bad); } .b.wait { border-color:var(--warn); color:var(--warn); font-weight:700; }
+  li.pr { display:flex; gap:8px; align-items:baseline; font-size:15px; min-width:0; flex-wrap:wrap; }
+  li.pr a { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
+  li.pr button { padding:1px 8px; font-size:13px; }
+  #detail .stack { display:grid; gap:10px; }
+
+  /* system */
+  .chart svg { width:100%; height:70px; display:block; }
+  .chart rect { fill:var(--accent); opacity:.85; } .chart rect:hover { opacity:1; }
+  #toast { position:fixed; right:24px; bottom:80px; background:var(--panel); border:1px solid var(--accent); padding:10px 14px; border-radius:10px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:9; }
+  #toast.show { opacity:1; }
   button[aria-pressed=true] { border-color:var(--accent); }
 
-  /* SAMM: the dairy parody skin — same data, only restyled */
-  body.samm { --bg:#fffdf5; --panel:#fff; --text:#2b1d0e; --muted:#7a6650; --line:#2b1d0e; --accent:#ff8fb1;
-              --ok:#3f9b3f; --bad:#c0392b; --warn:#e6a100; --on-accent:#2b1d0e;
-              font-family:"Comic Sans MS", "Chalkboard SE", cursive;
-              background:linear-gradient(#bfe6ff 0 55%, #8ed16f 55% 100%) fixed; }
-  /* hand-drawn wobble: uneven corner radii + hard offset shadow */
-  body.samm section { border-width:3px; border-radius:22px 34px 18px 30px / 30px 18px 34px 22px; backdrop-filter:none;
-    background:radial-gradient(circle at calc(100% + 6px) -6px, #1a1a1a 0 26px, transparent 27px),
-               radial-gradient(ellipse 22px 14px at calc(100% - 4px) calc(100% + 2px), #1a1a1a 99%, transparent), #fff;
-    box-shadow:6px 7px 0 #2b1d0e; }
-  body.samm h1 { font-size:34px; color:#fff; -webkit-text-stroke:1.5px #2b1d0e; text-shadow:3px 3px 0 var(--accent); }
-  body.samm #subtitle { display:block; flex-basis:100%; margin-top:-10px; font-style:italic; color:#2b1d0e; }
-  body.samm h2 { display:inline-block; color:#2b1d0e; background:#fff3a8; border:2px solid #2b1d0e; border-radius:8px 14px 9px 12px;
-    padding:2px 10px; transform:rotate(-1.5deg); box-shadow:2px 2px 0 #2b1d0e; }
-  body.samm button { background:#fff3a8; border:3px solid #2b1d0e; border-radius:16px 22px 14px 20px / 20px 14px 22px 16px;
-    color:var(--text); font-weight:700; box-shadow:3px 3px 0 #2b1d0e; transition:transform .08s, box-shadow .08s; }
-  body.samm button:not(:disabled):hover { transform:translate(-1px, -2px) rotate(-1deg); box-shadow:4px 5px 0 #2b1d0e; }
-  body.samm button:not(:disabled):active { transform:translate(3px, 3px); box-shadow:0 0 0 #2b1d0e; }
-  body.samm button.primary { background:var(--accent); }
-  body.samm button[aria-pressed=true] { background:#9be7ff; }
-  body.samm button.action { border-radius:34px 46px 26px 40px / 40px 26px 46px 34px; box-shadow:5px 6px 0 #2b1d0e; }
-  body.samm button.action:nth-child(2) { background:#bdeaff; }
-  body.samm button.action:nth-child(3) { background:#c9f5c0; }
-  body.samm button.action b { font-size:19px; }
-  body.samm :is(label.chip, .stage, .node, .tag) { border:2px solid #2b1d0e; box-shadow:2px 2px 0 #2b1d0e; background:#fff; }
-  body.samm .stage { border-radius:12px 18px 10px 16px; }
-
-  /* the herd wanders the meadow behind the panels; JS (herd) moves each cow */
-  #herd { display:none; }
-  body.samm #herd { display:block; position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
-  body.samm .wrap { position:relative; z-index:1; }
-  .cow { position:absolute; left:0; top:0; width:240px; transform-origin:50% 100%; }
-  .cow svg { width:100%; display:block; animation:bob .5s ease-in-out infinite alternate; }
-  .cow .tail { transform-origin:36px 64px; animation:wag 1s ease-in-out infinite alternate; }
-  .cow .head { transform-origin:150px 66px; animation:nod 2.6s ease-in-out infinite; }
-  .cow:nth-child(3) .head { animation-delay:-1s; } .cow:nth-child(4) .head { animation-delay:-1.8s; }
-  /* idle: the company logo pops up in a thought bubble and spins once */
-  .cow .logo { opacity:0; transform-box:fill-box; transform-origin:30% 100%; }
-  .cow .mark { transform-box:fill-box; transform-origin:center; }
-  .cow.idle .logo { animation:pop 3.2s ease-out both; }
-  .cow.idle .mark { animation:spin 3.2s ease-in-out; }
-  .cow.idle svg { animation:hop .4s ease-out 4 alternate; }
-  @keyframes pop { 0% { opacity:0; transform:scale(.2); } 12% { opacity:1; transform:scale(1.15); } 20%, 85% { opacity:1; transform:scale(1); }
-    100% { opacity:0; transform:scale(.6); } }
-  @keyframes spin { 0%, 25% { rotate:0deg; } 75%, 100% { rotate:360deg; } }
-  @keyframes hop { to { transform:translateY(-14px); } }
-  @keyframes bob { to { transform:translateY(-4px); } }
-  @keyframes wag { from { transform:rotate(-12deg); } to { transform:rotate(14deg); } }
-  @keyframes nod { 0%, 70%, 100% { transform:rotate(0); } 80% { transform:rotate(9deg); } 90% { transform:rotate(-3deg); } }
-  @media (prefers-reduced-motion:reduce) { .cow, .cow * { animation:none !important; } }
-  body.samm .dot { width:auto; height:auto; background:none; font-size:14px; }
-  body.samm .dot::before { content:"🐄"; }
-  body.samm .dot.crashed::before { content:"🥩"; }
-  body.samm .dot.done::before { content:"🥛"; }
-  body.samm .meter { height:16px; border:2px solid #2b1d0e; background:#fff; }
-  body.samm .meter > div { background:repeating-linear-gradient(90deg, #fff 0 10px, #f3f0e6 10px 20px); }
-  body.samm .chart rect { fill:#fff; stroke:#2b1d0e; stroke-width:.6; opacity:1; }
-  body.samm .stage, body.samm .node, body.samm .tag { border-width:2px; }
-  body.samm input:is([type=number], [type=text]), body.samm :is(select, textarea) { background:#fff; color:var(--text); }
-
   /* blur: hide what PRs and tasks say, keep counts, states and buttons readable */
-  body.blurred :is(.pname, li.pr a, li.prop summary, li.prop > span, details p, #plan .item > label > span,
-    #questions .item > div, .wrow .title, li.conflict pre, li.conflict span[title]) { filter:blur(5px); }
+  body.blurred .sens { filter:blur(5px); }
 </style>
 </head>
 <body>
-<!-- the herd: one shared body and face, each cow gets its own hair, eyes, mouth and collar
-     (nods to three AI-era CEOs: tousled hair + grey crewneck, swept-back hair + black tee + smirk,
-     curls + round glasses + light blue shirt); when idle each shows its company logo in a thought bubble -->
-<div id="herd" aria-hidden="true">
-<svg width="0" height="0" style="position:absolute"><defs>
-  <symbol id="cowBody" viewBox="0 0 200 140">
-    <g fill="#fff"><rect x="50" y="92" width="11" height="34" rx="4"/><rect x="68" y="94" width="11" height="32" rx="4"/>
-      <rect x="104" y="94" width="11" height="32" rx="4"/><rect x="121" y="92" width="11" height="34" rx="4"/></g>
-    <g fill="#2b1d0e" stroke="none"><rect x="50" y="120" width="11" height="7" rx="2"/><rect x="68" y="120" width="11" height="7" rx="2"/>
-      <rect x="104" y="120" width="11" height="7" rx="2"/><rect x="121" y="120" width="11" height="7" rx="2"/></g>
-    <ellipse cx="92" cy="74" rx="56" ry="32" fill="#fff"/>
-    <g fill="#1a1a1a" stroke="none"><ellipse cx="70" cy="62" rx="15" ry="10"/><ellipse cx="108" cy="88" rx="12" ry="7"/><ellipse cx="122" cy="60" rx="8" ry="6"/></g>
-    <ellipse cx="94" cy="104" rx="11" ry="6" fill="#ffb3c6"/>
-  </symbol>
-  <symbol id="cowFace" viewBox="0 0 200 140">
-    <ellipse cx="141" cy="36" rx="9" ry="5" fill="#fff" transform="rotate(-25 141 36)"/>
-    <ellipse cx="185" cy="36" rx="9" ry="5" fill="#fff" transform="rotate(25 185 36)"/>
-    <ellipse cx="163" cy="50" rx="23" ry="26" fill="#fff"/>
-    <circle cx="154" cy="47" r="6.5" fill="#fff" stroke-width="2.2"/><circle cx="172" cy="47" r="6.5" fill="#fff" stroke-width="2.2"/>
-    <ellipse cx="163" cy="66" rx="14" ry="9" fill="#ffc4d0"/>
-    <ellipse cx="158" cy="64" rx="1.8" ry="2.6" fill="#2b1d0e" stroke="none"/><ellipse cx="168" cy="64" rx="1.8" ry="2.6" fill="#2b1d0e" stroke="none"/>
-  </symbol>
-</defs></svg>
-<div class="cow"><svg viewBox="0 -50 200 190" stroke="#2b1d0e" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
-  <path class="tail" d="M38 64 Q22 74 26 98" fill="none"/><circle class="tail" cx="26" cy="100" r="5" fill="#2b1d0e"/>
-  <use href="#cowBody" width="200" height="140"/>
-  <g class="head">
-    <path d="M136 72 Q146 56 160 64 Q156 80 140 82 Z" fill="#8d939c"/>
-    <use href="#cowFace" width="200" height="140"/>
-    <path d="M142 37 Q141 24 152 23 Q155 15 165 19 Q173 13 180 21 Q187 26 185 37 Q178 29 168 31 Q164 25 158 30 Q150 28 142 37 Z" fill="#6b4a32"/>
-    <circle cx="154" cy="47" r="7.5" fill="#fff" stroke-width="2.2"/><circle cx="172" cy="47" r="7.5" fill="#fff" stroke-width="2.2"/>
-    <circle cx="154" cy="47" r="2" fill="#2b1d0e" stroke="none"/><circle cx="172" cy="47" r="2" fill="#2b1d0e" stroke="none"/>
-    <path d="M146 38 Q151 34 158 34 M168 34 Q175 34 180 38" fill="none" stroke-width="2.2"/>
-    <path d="M159 71 L167 71" fill="none" stroke-width="1.8"/>
-  </g>
-  <g class="logo"><circle cx="150" cy="12" r="3" fill="#fff" stroke-width="2"/><circle cx="156" cy="0" r="4.5" fill="#fff" stroke-width="2"/>
-    <circle cx="163" cy="-24" r="21" fill="#fff"/><g transform="translate(163 -24)"><g class="mark"><g fill="none" stroke="#111" stroke-width="2.4"><rect x="-2" y="-14" width="10" height="17" rx="5" transform="rotate(0)"/><rect x="-2" y="-14" width="10" height="17" rx="5" transform="rotate(60)"/><rect x="-2" y="-14" width="10" height="17" rx="5" transform="rotate(120)"/><rect x="-2" y="-14" width="10" height="17" rx="5" transform="rotate(180)"/><rect x="-2" y="-14" width="10" height="17" rx="5" transform="rotate(240)"/><rect x="-2" y="-14" width="10" height="17" rx="5" transform="rotate(300)"/></g></g></g></g>
-</svg></div>
-<div class="cow"><svg viewBox="0 -50 200 190" stroke="#2b1d0e" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
-  <path class="tail" d="M38 64 Q22 74 26 98" fill="none"/><circle class="tail" cx="26" cy="100" r="5" fill="#2b1d0e"/>
-  <use href="#cowBody" width="200" height="140"/>
-  <g class="head">
-    <path d="M136 72 Q146 56 160 64 Q156 80 140 82 Z" fill="#1c1c1f"/>
-    <use href="#cowFace" width="200" height="140"/>
-    <path d="M141 38 Q139 20 156 16 Q170 9 182 19 Q190 27 185 38 Q181 28 170 28 Q158 25 150 31 Q145 33 141 38 Z" fill="#2e211a"/>
-    <circle cx="155" cy="48.5" r="2.6" fill="#2b1d0e" stroke="none"/><circle cx="173" cy="48.5" r="2.6" fill="#2b1d0e" stroke="none"/>
-    <path d="M147.5 47 a6.5 6.5 0 0 1 13 0 Z M165.5 47 a6.5 6.5 0 0 1 13 0 Z" fill="#fff" stroke-width="2.2"/>
-    <path d="M146 39 L159 38 M167 36 Q173 31 180 35" fill="none" stroke-width="3.2"/>
-    <path d="M154 70 Q162 73 172 66" fill="none" stroke-width="2.2"/>
-  </g>
-  <g class="logo"><circle cx="150" cy="12" r="3" fill="#fff" stroke-width="2"/><circle cx="156" cy="0" r="4.5" fill="#fff" stroke-width="2"/>
-    <circle cx="163" cy="-24" r="21" fill="#fff"/><g transform="translate(163 -24)"><g class="mark"><path d="M-12 -13 L12 13 M12 -13 L3 -3 M-3 3 L-12 13" fill="none" stroke="#111" stroke-width="5"/></g></g></g>
-</svg></div>
-<div class="cow"><svg viewBox="0 -50 200 190" stroke="#2b1d0e" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
-  <path class="tail" d="M38 64 Q22 74 26 98" fill="none"/><circle class="tail" cx="26" cy="100" r="5" fill="#2b1d0e"/>
-  <use href="#cowBody" width="200" height="140"/>
-  <g class="head">
-    <path d="M136 72 Q146 56 160 64 Q156 80 140 82 Z" fill="#a9cbea"/><path d="M140 70 L148 80 L152 68 Z" fill="#fff" stroke-width="2"/>
-    <use href="#cowFace" width="200" height="140"/>
-    <g fill="#1f1611" stroke="none"><circle cx="141" cy="42" r="5"/><circle cx="142" cy="34" r="6"/><circle cx="147" cy="26" r="7"/><circle cx="155" cy="20" r="7.5"/>
-      <circle cx="164" cy="17" r="8"/><circle cx="173" cy="19" r="7.5"/><circle cx="180" cy="25" r="7"/><circle cx="185" cy="33" r="6"/><circle cx="186" cy="41" r="5"/></g>
-    <circle cx="154" cy="47" r="2.4" fill="#2b1d0e" stroke="none"/><circle cx="172" cy="47" r="2.4" fill="#2b1d0e" stroke="none"/>
-    <path d="M145 47 a9 9 0 1 0 18 0 a9 9 0 1 0 -18 0 M163 47 a9 9 0 1 0 18 0 a9 9 0 1 0 -18 0 M141 45 L145 46 M181 46 L185 45" fill="none" stroke-width="2.6"/>
-    <path d="M154 69 Q163 78 172 69 Z" fill="#fff" stroke-width="1.8"/>
-  </g>
-  <g class="logo"><circle cx="150" cy="12" r="3" fill="#fff" stroke-width="2"/><circle cx="156" cy="0" r="4.5" fill="#fff" stroke-width="2"/>
-    <circle cx="163" cy="-24" r="21" fill="#fff"/><g transform="translate(163 -24)"><g class="mark"><path d="M0 0 L15.0 0.0 M0 0 L8.7 5.0 M0 0 L7.5 13.0 M0 0 L0.0 10.0 M0 0 L-7.5 13.0 M0 0 L-8.7 5.0 M0 0 L-15.0 0.0 M0 0 L-8.7 -5.0 M0 0 L-7.5 -13.0 M0 0 L-0.0 -10.0 M0 0 L7.5 -13.0 M0 0 L8.7 -5.0" fill="none" stroke="#d97757" stroke-width="4.5"/></g></g></g>
-</svg></div>
-</div>
 <div class="wrap">
-  <header>
-    <h1 data-samm="SAMM">Harness</h1>
+  <header class="top">
+    <h1>Harness</h1>
     <div class="status" id="status"><span class="muted">načítám…</span></div>
+    <div class="quota" id="quotaMini"></div>
     <span class="spacer"></span>
-    <button class="small" id="sammToggle" aria-pressed="false" title="Parodický mlékárenský vzhled">🐄 Mlékárna</button>
     <button class="small" id="blurredToggle" aria-pressed="false" title="Rozmazat obsah PR a úkolů">🙈 Rozmazat</button>
-    <div id="subtitle">Subscription Automatic Milking Machine — dojíme tokeny 24/7</div>
   </header>
 
-  <div class="col left">
-    <section id="flow">
-      <div class="actions">
-        <button class="action primary" data-act="run" data-path="pick_tasks worker reflect">
-          <b>▶ Zpracovat frontu</b><span id="runSub">Implementuje úkoly [ ] z BACKLOGu a otevře PR</span></button>
-        <button class="action" data-act="go" data-path="discover prioritize approve pick_tasks worker reflect">
-          <b>🔍 Najít a naplánovat</b><span>Opus projde projekty, navrhne úkoly; plán schválíš tady, pak je zpracuje</span></button>
-        <button class="action" data-act="go" data-lenses="cleanup" data-path="discover prioritize approve pick_tasks worker reflect">
-          <b>🧹 Revize čistoty kódu</b><span>Opus projde celé repo, najde spaghetti a navrhne refaktory; plán schválíš tady</span></button>
-      </div>
-      <div class="row" id="scope" style="margin-top:10px"></div>
-      <div class="row" id="lenses" style="margin-top:6px; font-size:13px"><span class="muted">Hledat:</span>
-        <label class="chip"><input type="checkbox" value="fix" checked> Bugy a opravy</label>
-        <label class="chip"><input type="checkbox" value="feature" checked> Nové features</label></div>
-      <div class="row" id="limits" style="margin-top:6px; font-size:13px"><span class="muted">Tento běh:</span>
-        <label class="chip">max úkolů <input type="number" id="maxTasks" min="1"></label>
-        <label class="chip">najednou <input type="number" id="maxParallel" min="1"></label></div>
-      <div class="pipe" id="pipe"></div>
-      <div id="workers"></div>
-      <div id="flowHint" class="muted"></div>
-    </section>
-    <section id="planBox" class="attention" hidden><h2>Plán ke schválení</h2><div id="plan"></div></section>
-    <section id="questionBox" class="attention" hidden><h2>Dotazy k úkolům</h2><div id="questions"></div></section>
-    <section id="mergeBox" class="attention" hidden><h2>Návrhy ke sloučení</h2><div id="merges"></div></section>
-    <div class="projects" id="projects"></div>
+  <div class="bar">
+    <button class="action primary" data-act="run" data-path="pick_tasks worker reflect">
+      <b>▶ Zpracovat frontu</b><span id="runSub">Implementuje úkoly [ ] a otevře PR</span></button>
+    <button class="action" data-act="go" data-path="discover prioritize approve pick_tasks worker reflect">
+      <b>🔍 Najít a naplánovat</b><span>Opus navrhne úkoly, plán schválíš</span></button>
+    <button class="action" data-act="go" data-lenses="cleanup" data-path="discover prioritize approve pick_tasks worker reflect">
+      <b>🧹 Revize čistoty kódu</b><span>Opus najde spaghetti, navrhne refaktory</span></button>
+    <details class="opts"><summary>⚙ Možnosti běhu</summary>
+      <div class="pop">
+        <div class="row" id="lenses"><span class="muted">Hledat:</span>
+          <label class="chip"><input type="checkbox" value="fix" checked> Bugy a opravy</label>
+          <label class="chip"><input type="checkbox" value="feature" checked> Nové features</label></div>
+        <div class="row" id="limits"><span class="muted">Tento běh:</span>
+          <label class="chip">max úkolů <input type="number" id="maxTasks" min="1"></label>
+          <label class="chip">najednou <input type="number" id="maxParallel" min="1"></label></div>
+      </div></details>
   </div>
 
-  <div class="col">
-    <section><h2>Kvóta subscription</h2><div id="quota" class="muted">bez dat — žádný běh zatím nenahlásil využití</div></section>
-    <section class="chart"><h2>Tokeny po dnech (14 dní)</h2><div id="chart"></div><div id="cost" class="muted"></div></section>
-    <section id="lessonsBox" hidden><h2>Lekce z reflexe</h2><div id="lessons"></div></section>
-    <section><h2>Historie autorunu</h2><input type="date" id="historyDay"><pre id="history" class="muted"></pre></section>
+  <section id="flow">
+    <div class="pipe" id="pipe"></div>
+    <div id="workers"></div>
+    <div id="flowHint" class="muted"></div>
+  </section>
+
+  <div class="cols">
+    <div class="col">
+      <section><h2>Na mě čeká <span class="count" id="inboxCount">0</span></h2>
+        <div class="filters" id="inboxFilter"></div>
+        <div id="inbox"></div>
+        <div id="inboxEmpty" class="muted" hidden></div></section>
+    </div>
+
+    <div class="col">
+      <section><h2>Projekty <span class="count" id="projCount"></span><span class="spacer"></span>
+        <button class="small" data-a="scopeAll" title="Do běhu zahrnout všechny projekty">vše</button></h2>
+        <div id="projects"></div></section>
+      <section id="detail" hidden>
+        <h2 id="detailHead"></h2>
+        <div class="stack"><div id="detailData"></div><div id="detailStatic"></div></div></section>
+    </div>
+
+    <div class="col">
+      <section class="chart"><h2>Tokeny (14 dní)</h2><div id="chart"></div><div id="cost" class="muted"></div></section>
+      <section id="lessonsBox" hidden><h2>Aktivní lekce</h2><div id="lessons"></div></section>
+      <section><details><summary>Historie autorunu</summary><input type="date" id="historyDay"><pre id="history" class="muted"></pre></details></section>
+    </div>
   </div>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -295,9 +204,12 @@
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-let serveOn = false, questionIds = "", mergesKey = "", planId = "", projectsKey = "", lessonsKey = "", scopeKey = "", boot = null;
-let excluded = new Set();  // unchecked in the project filter; a new project starts checked
+let serveOn = false, boot = null, O = null, proposals = [], lessonsAll = [];
+let selected = null, typeFilter = "", paused = false;
+let keys = {status: "", projects: "", detail: "", detailStatic: "", lessons: "", filter: ""};
+let excluded = new Set();  // unchecked in the project list; a new project starts checked
 try { excluded = new Set(JSON.parse(localStorage.getItem("excluded") || "[]")); } catch (e) {}
+const saveExcluded = () => { try { localStorage.setItem("excluded", JSON.stringify([...excluded])); } catch (e) {} };
 
 function toast(text) {
   $("toast").textContent = text;
@@ -305,17 +217,41 @@ function toast(text) {
   setTimeout(() => $("toast").classList.remove("show"), 3500);
 }
 
-async function act(action, body = {}) {
-  const r = await fetch(`/control/${action}`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+async function call(url, body) {
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: body === undefined ? undefined : JSON.stringify(body)});
   const data = await r.json().catch(() => ({}));
   toast(r.ok ? (data.message || "OK") : (data.detail || `chyba ${r.status}`));
+  return r.ok;
+}
+
+async function act(action, body = {}) {
+  const ok = await call(`/control/${action}`, body);
   refresh();
+  return ok;
+}
+
+// two clicks instead of confirm(): a modal dialog would freeze the wallpaper (Lively)
+function armed(button, label) {
+  if (button.dataset.armed === "1") return true;
+  button.dataset.armed = "1";
+  button.textContent = "Opravdu?";
+  setTimeout(() => { button.dataset.armed = ""; button.textContent = label; }, 4000);
+  return false;
+}
+
+const hue = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 0);
+const chip = name => `<span class="pc sens" style="--h:${hue(name)}">${esc(name)}</span>`;
+const dis = () => serveOn ? "" : "disabled";
+const plural = (n, one, few, many) => n === 1 ? one : n >= 2 && n <= 4 ? few : many;
+
+function pickedNames() {
+  return (O ? O.projects : []).map(p => p.name).filter(n => !excluded.has(n));
 }
 
 function scoped() {
   // all checked → no filter, so the daemon's own default (every project) applies
-  const boxes = [...$("scope").querySelectorAll("input")];
-  return boxes.every(c => c.checked) ? {} : {projects: boxes.filter(c => c.checked).map(c => c.value)};
+  const all = O ? O.projects.length : 0, picked = pickedNames();
+  return picked.length === all ? {} : {projects: picked};
 }
 
 function limits() {
@@ -342,64 +278,30 @@ function runBody(button) {
     ? {...body, lenses: boxes.filter(c => c.checked).map(c => c.value)} : body;
 }
 
-function renderScope(projects) {
-  const names = projects.map(p => p.name), key = names.join();
-  if (key === scopeKey) return;
-  scopeKey = key;
-  $("scope").innerHTML = `<span class="muted">Projekty:</span>` + names.map(n => `<label class="chip">
-      <input type="checkbox" value="${esc(n)}" ${excluded.has(n) ? "" : "checked"}> <span class="pname">${esc(n)}</span></label>`).join("");
-  $("scope").querySelectorAll("input").forEach(c => c.onchange = () => {
-    c.checked ? excluded.delete(c.value) : excluded.add(c.value);
-    try { localStorage.setItem("excluded", JSON.stringify([...excluded])); } catch (e) {}
-    renderRunSub(projects);
-  });
+function renderRunSub() {
+  const picked = new Set(pickedNames());
+  const n = O.projects.filter(p => picked.has(p.name)).reduce((a, p) => a + p.counts[" "], 0);
+  $("runSub").textContent = `${n} ${plural(n, "úkol", "úkoly", "úkolů")} ve frontě → implementace a PR`;
 }
 
 async function mergePr(button) {
-  // two clicks instead of confirm(): a modal dialog would freeze the wallpaper (Lively)
-  if (button.dataset.armed !== "1") {
-    button.dataset.armed = "1";
-    button.textContent = "Opravdu?";
-    setTimeout(() => { button.dataset.armed = ""; button.textContent = "Merge"; }, 4000);
-    return;
-  }
+  if (!armed(button, "Merge")) return;
   button.disabled = true;
   button.textContent = "merguju…";
-  const r = await fetch("/prs/merge", {method: "POST", headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({project: button.dataset.project, number: +button.dataset.number})});
-  const data = await r.json().catch(() => ({}));
-  toast(r.ok ? data.message : (data.detail || `chyba ${r.status}`));
-  projectsKey = "";
+  await call("/prs/merge", {project: button.dataset.project, number: +button.dataset.number});
   refresh();
-}
-
-function conflictBox(project, pr) {
-  const c = pr.conflict;
-  if (!c || c.state === "kept") return "";
-  const files = `<b>Konflikt</b> v <span title="${esc(c.files.join("\n"))}">${c.files.map(f => esc(f.split("/").pop())).join(", ")}</span>`;
-  if (c.state === "resolving") return `<li class="conflict">${files} · <span class="muted">🤖 agent řeší konflikt a pouští testy…</span></li>`;
-  const data = `data-project="${esc(project)}" data-number="${pr.number}"`;
-  return `<li class="conflict">${files}${c.state === "failed" ? ` · agent neuspěl:<pre>${esc(c.error)}</pre>` : ""}
-    <div class="row"><button class="primary" data-conflict="agent" ${data}
-      title="Merge main do větve, agent vyřeší konflikty, push jen když projde verify">Vyřešit agentem</button>
-    <button data-conflict="reimplement" ${data} title="Zavře PR, smaže větev a vrátí úkol do fronty">Přeimplementovat</button>
-    <button data-conflict="keep" ${data} title="Skrýt; PR zůstane s konfliktem">Nechat</button></div></li>`;
 }
 
 async function settleConflict(button) {
   const action = button.dataset.conflict;
-  if (action === "reimplement" && button.dataset.armed !== "1") {  // closes the PR: two clicks, as for Merge
-    button.dataset.armed = "1";
-    button.textContent = "Opravdu?";
-    setTimeout(() => { button.dataset.armed = ""; button.textContent = "Přeimplementovat"; }, 4000);
-    return;
-  }
+  if (action === "reimplement" && !armed(button, "Přeimplementovat")) return;  // closes the PR: two clicks, as for Merge
   button.disabled = true;
-  const r = await fetch("/prs/conflict", {method: "POST", headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({project: button.dataset.project, number: +button.dataset.number, action})});
-  const data = await r.json().catch(() => ({}));
-  toast(r.ok ? data.message : (data.detail || `chyba ${r.status}`));
-  projectsKey = "";
+  await call("/prs/conflict", {project: button.dataset.project, number: +button.dataset.number, action});
+  refresh();
+}
+
+async function approveAll(ids) {
+  for (const task of ids) await call("/control/approve", {task});  // sequential: serve holds a lock per action
   refresh();
 }
 
@@ -428,18 +330,21 @@ let agentResolving = false;
 
 function renderStatus(s) {
   serveOn = !!s;
+  paused = !!(s && s.paused);
   runActive = !!(s && s.run && ACTIVE.includes(s.run.status));
   document.querySelectorAll("button.action").forEach(b => {
     b.disabled = !serveOn || runActive;
     b.title = !serveOn ? "serve neběží" : runActive ? "běh už probíhá — počkej, až doběhne" : "";
   });
+  const key = JSON.stringify(s);
+  if (key === keys.status) return;  // an opened limits popover survives refreshes
+  keys.status = key;
   if (!s) { $("status").innerHTML = `<span class="muted">serve neběží — tlačítka jsou vypnutá</span>`; return; }
   const run = s.run;
   $("status").innerHTML = `<span class="dot ${run ? run.status : ""}"></span>
     <span>${run ? `${esc(run.id)} — <b>${esc(RUN_STATUS[run.status] || run.status)}</b>` : "žádný běh"}</span>
-    <span class="muted" title="${esc(s.limits.join("\n"))}">· autorun: <b>${s.paused ? "vypnutý" : "zapnutý"}</b></span>
-    <button class="small" id="auto" title="Automatické spouštění fronty, návrhů a cleanup review v limitech projektu. Běžící běh nezastaví, ruční tlačítka fungují vždy.">${s.paused ? "Zapnout" : "Vypnout"}</button>`;
-  $("auto").onclick = () => act(s.paused ? "resume" : "pause");
+    <details class="why"><summary>· autorun: <b>${s.paused ? "vypnutý" : "zapnutý"}</b></summary><div class="pop">${esc(s.limits.join("\n"))}</div></details>
+    <button class="small" data-a="auto" title="Automatické spouštění fronty, návrhů a cleanup review v limitech projektu. Běžící běh nezastaví, ruční tlačítka fungují vždy.">${s.paused ? "Zapnout" : "Vypnout"}</button>`;
 }
 
 function stageState(name, p, run) {
@@ -457,14 +362,16 @@ function nodeState(w, node, run) {
   return st || "";
 }
 
+let hint = "", hovered = null;
+
 function renderFlow(p, run) {
   $("pipe").innerHTML = STAGES.map(([name, label, sub]) => {
     const extra = name === "discover" && Object.keys(p.discover).length
-      ? Object.entries(p.discover).map(([proj, st]) => `<span class="pname">${esc(proj)}</span> ${st === "done" ? "✓" : "…"}`).join(" · ") : sub;
+      ? Object.entries(p.discover).map(([proj, st]) => `<span class="sens">${esc(proj)}</span> ${st === "done" ? "✓" : "…"}`).join(" · ") : sub;
     return `<div class="stage ${stageState(name, p, run)}" data-stage="${name}">${label}<small>${extra}</small></div>`;
   }).join(`<span class="arrow">→</span>`);
   $("workers").innerHTML = p.workers.map(w => `<div class="wrow">
-      <span class="title"><b>${esc(w.id)}</b> ${esc(w.title)}</span>
+      <span class="title"><b>${esc(w.id)}</b> <span class="sens">${esc(w.title)}</span></span>
       ${NODES.filter(([n]) => !["clarify", "replan"].includes(n) || w.nodes[n]).map(([n, label]) =>
         `<span class="node ${nodeState(w, n, run)}">${label}${n === "implement" && w.attempts > 1 ? ` ×${w.attempts}` : ""}</span>`).join("")}
       ${w.outcome && w.nodes.report === "done" ? (w.pr_url ? `<a href="${esc(w.pr_url)}" target="_blank" rel="noopener">${OUTCOME[w.outcome] || esc(w.outcome)}</a>`
@@ -474,7 +381,6 @@ function renderFlow(p, run) {
   if ($("flow").dataset.preview && hovered) preview(hovered);  // a refresh under the mouse keeps the preview
 }
 
-let hint = "", hovered = null;
 async function refreshFlow(run) {
   if (!run) return renderFlow({stages: {}, discover: {}, workers: []}, {});
   try { renderFlow(await (await fetch(`/runs/${encodeURIComponent(run.id)}/progress`)).json(), run); } catch (e) {}
@@ -498,186 +404,278 @@ function unpreview() {
   $("flowHint").textContent = hint;
 }
 
-function renderRunSub(projects) {
-  const picked = new Set(Object.keys(scoped()).length ? scoped().projects : projects.map(p => p.name));
-  const n = projects.filter(p => picked.has(p.name)).reduce((a, p) => a + p.counts[" "], 0);
-  $("runSub").textContent = `${n} ${n === 1 ? "úkol" : n >= 2 && n <= 4 ? "úkoly" : "úkolů"} ve frontě → implementace a PR`;
+/* ---------- inbox: everything that waits for the owner, most urgent first ---------- */
+
+const item = (rank, group, project, key, sig, cls, html, n = 1) => ({rank, group, project, key, sig: JSON.stringify([sig, serveOn]), cls, html, n});
+const head = (icon, project, text, extra = "") =>
+  `<div class="ch"><span class="ic" aria-hidden="true">${icon}</span>${project ? chip(project) : ""}${text}${extra}</div>`;
+
+function planItem(pl) {
+  return item(0, "decide", "", `plan:${pl.id}`, pl.id, "urgent",
+    head("!", "", `<b>Plán ke schválení</b>`, `<span class="muted">${pl.plan.length} ${plural(pl.plan.length, "úkol", "úkoly", "úkolů")}</span>`)
+    + pl.plan.map((p, i) => `<label class="plan"><input type="checkbox" checked value="${i}"><span>${chip(p.project)}
+        <span class="sens">${esc(p.title)}</span> <span class="tag">${p.source === "new" ? "nový" : "z BACKLOGu"}</span>${p.kind ? ` <span class="tag">${esc(p.kind)}</span>` : ""}
+        ${p.why ? `<br><span class="muted sens">${esc(p.why)}</span>` : ""}</span></label>`).join("")
+    + `<div class="row"><button class="primary" data-a="planOk">Schválit vybrané</button><button data-a="planQuit">Ukončit běh</button></div>`);
 }
 
-function renderPlan(plan) {
-  $("planBox").hidden = !plan;
-  if (!plan || plan.id === planId) return;
-  planId = plan.id;
-  $("plan").innerHTML = plan.plan.map((p, i) => `<div class="item"><label class="plan">
-      <input type="checkbox" checked value="${i}"> <span><b>[${esc(p.project)}]</b> ${esc(p.title)}
-      <span class="tag">${p.source === "new" ? "nový" : "z BACKLOGu"}</span>${p.kind ? ` <span class="tag">${esc(p.kind)}</span>` : ""}
-      ${p.why ? `<br><span class="muted">${esc(p.why)}</span>` : ""}</span></label></div>`).join("")
-    + `<div class="row"><button class="primary" id="planOk">Schválit vybrané</button><button id="planQuit">Ukončit běh</button></div>`;
-  $("planOk").onclick = () => act("plan", {keep: [...$("plan").querySelectorAll("input:checked")].map(c => +c.value)});
-  $("planQuit").onclick = () => act("plan", {keep: "q"});
+function questionItem(q) {
+  return item(1, "decide", q.project, `q:${q.id}`, q.id, "urgent",
+    head("?", q.project, `<b>${esc(q.task)}</b>`, `<span class="t sens">${esc(q.title)}</span>`)
+    + `<div class="sens">${esc(q.question)}</div>
+      <form class="row" data-form="answer" data-id="${esc(q.id)}"><input type="text" name="text" aria-label="Odpověď" required>
+        <button class="primary">Odeslat</button><button type="button" data-a="skipQ" data-id="${esc(q.id)}">Přeskočit</button></form>`);
 }
 
-function renderQuestions(qs) {
-  const open = qs.filter(q => !q.answered);
-  $("questionBox").hidden = !open.length;
-  const ids = open.map(q => q.id).join();
-  if (ids === questionIds) return;  // don't wipe what the owner is typing
-  questionIds = ids;
-  $("questions").innerHTML = open.map(q => `<div class="item" data-id="${esc(q.id)}">
-      <div><b>[${esc(q.project)}] ${esc(q.task)}</b> ${esc(q.title)}</div><div>${esc(q.question)}</div>
-      <form class="row"><input type="text" aria-label="Odpověď" required><button class="primary">Odeslat</button>
-      <button type="button" class="skip">Přeskočit</button></form></div>`).join("");
-  $("questions").querySelectorAll(".item").forEach(el => {
-    const id = el.dataset.id;
-    el.querySelector("form").onsubmit = e => { e.preventDefault(); act("answer", {id, text: el.querySelector("input").value}); };
-    el.querySelector(".skip").onclick = () => act("answer", {id, text: ""});
+function conflictItem(project, pr) {
+  const c = pr.conflict, d = `data-project="${esc(project)}" data-number="${pr.number}"`;
+  const files = `<b>Konflikt</b> v <span title="${esc(c.files.join("\n"))}">${c.files.map(f => esc(f.split("/").pop())).join(", ")}</span>`;
+  const body = c.state === "resolving" ? `<span class="muted">🤖 agent řeší konflikt a pouští testy…</span>`
+    : `${c.state === "failed" ? `agent neuspěl:<pre class="sens">${esc(c.error)}</pre>` : ""}
+      <div class="row"><button class="primary" data-a="conflict" data-conflict="agent" ${d}
+        title="Merge main do větve, agent vyřeší konflikty, push jen když projde verify">Vyřešit agentem</button>
+      <button data-a="conflict" data-conflict="reimplement" ${d} title="Zavře PR, smaže větev a vrátí úkol do fronty">Přeimplementovat</button>
+      <button data-a="conflict" data-conflict="keep" ${d} title="Skrýt; PR zůstane s konflikty">Nechat</button></div>`;
+  return item(2, "pr", project, `c:${project}#${pr.number}`, pr, "bad conflict",
+    head("⚠", project, `<a class="t sens" href="${esc(pr.url)}" target="_blank" rel="noopener">#${pr.number} ${esc(prTitle(pr))}</a>`) + `<div>${files}</div>${body}`);
+}
+
+function readyItem(project, pr) {
+  return item(4, "pr", project, `pr:${project}#${pr.number}`, pr, "",
+    `<div class="ch"><span class="ic" aria-hidden="true">✓</span>${chip(project)}${prLine(project, pr)}</div>`);
+}
+
+function mergeItem(m) {
+  return item(3, "decide", m.project, `m:${m.id}`, m, "",
+    head("⇄", m.project, `<b class="sens">${m.titles.map(esc).join(" + ")}</b>`)
+    + `<details><summary class="sens">→ ${esc(m.title)}</summary>${m.why ? `<p class="muted sens">${esc(m.why)}</p>` : ""}
+        <p class="sens">${esc(m.description)}</p>${m.done ? `<p class="sens">Hotovo = ${esc(m.done)}</p>` : ""}</details>
+      <div class="row"><button class="primary" data-a="mergeProp" data-id="${esc(m.id)}" data-accept="1" title="Nový návrh místo původních, ty se označí jako sloučené">Sloučit</button>
+        <button data-a="mergeProp" data-id="${esc(m.id)}" title="Nechat návrhy zvlášť, tahle skupina se už nenabídne">Ignorovat</button></div>`);
+}
+
+function proposalItem(project, props) {
+  const sorted = [...props].sort((a, b) => a.priority - b.priority);
+  const p1 = sorted.filter(t => t.priority === 1).map(t => t.id);
+  return item(5, "prop", project, `p:${project}`, sorted, "",
+    head("◇", project, `<b>${props.length} ${plural(props.length, "návrh", "návrhy", "návrhů")}</b>`,
+      `<span class="spacer"></span>${p1.length ? `<button class="small" data-a="approveAll" data-ids="${esc(p1.join(","))}" ${dis()} title="Schválit všechny návrhy s prioritou P1">Schválit P1 (${p1.length})</button>` : ""}`)
+    + `<ul>${sorted.map(t => `<li class="prop">
+        <details><summary title="${esc(t.title)}"><span class="muted">P${t.priority}</span> ${t.kind ? `<span class="tag">${esc(t.kind)}</span>` : ""}
+          <span class="sens">${esc(t.title)}</span></summary>${t.description ? `<p class="sens">${esc(t.description)}</p>` : ""}</details>
+        <button data-a="approve" data-task="${esc(t.id)}" title="Schválit → fronta" aria-label="Schválit" ${dis()}>✅</button>
+        <button data-a="edit" data-task="${esc(t.id)}" title="Upravit" aria-label="Upravit" ${dis()}>✏️</button>
+        <button data-a="reject" data-task="${esc(t.id)}" title="Zamítnout" aria-label="Zamítnout" ${dis()}>❌</button></li>`).join("")}</ul>`, props.length);
+}
+
+function lessonItem(proposed) {
+  const btn = (l, approve, label, title) => `<button data-a="lesson" data-lesson="${esc(l.id)}" data-project="${esc(l.project)}"
+      data-approve="${approve}" title="${title}" aria-label="${title}" ${dis()}>${label}</button>`;
+  return item(6, "lesson", "", "l:proposed", proposed, "",
+    head("✎", "", `<b>Lekce ke schválení</b>`) + `<ul>${proposed.map(l => `<li class="prop">${chip(l.project)}
+        <span class="sens" style="flex:1;min-width:0">${esc(l.text)}</span>${btn(l, 1, "✅", "Platí")}${btn(l, 0, "❌", "Zahodit")}</li>`).join("")}</ul>`, proposed.length);
+}
+
+function inboxItems(o) {
+  const s = o.serve, items = [];
+  if (s && s.plan) items.push(planItem(s.plan));
+  if (s) for (const q of s.questions.filter(q => !q.answered)) items.push(questionItem(q));
+  for (const p of o.projects) for (const pr of p.prs || []) {
+    if (pr.conflict && pr.conflict.state !== "kept") items.push(conflictItem(p.name, pr));
+    else if (pr.ci === "ok" && !pr.isDraft && pr.mergeable !== "CONFLICTING") items.push(readyItem(p.name, pr));
+  }
+  if (s) for (const m of s.merges) items.push(mergeItem(m));
+  for (const p of o.projects) {
+    const props = o.proposals.filter(t => t.project === p.name);
+    if (props.length) items.push(proposalItem(p.name, props));
+  }
+  const proposed = (s ? s.lessons : []).filter(l => l.status === "proposed");
+  if (proposed.length) items.push(lessonItem(proposed));
+  return items.sort((a, b) => a.rank - b.rank || a.project.localeCompare(b.project));
+}
+
+// keyed reconcile: a card whose content did not change keeps its DOM, so typed answers and opened <details> survive refreshes
+function reconcile(box, items) {
+  const have = new Map([...box.children].map(el => [el.dataset.key, el]));
+  items.forEach((it, i) => {
+    let el = have.get(it.key);
+    if (!el || el.dataset.sig !== it.sig) {
+      const fresh = document.createElement("div");
+      fresh.className = `card ${it.cls}`;
+      fresh.dataset.key = it.key;
+      fresh.dataset.sig = it.sig;
+      fresh.innerHTML = it.html;
+      if (el) el.replaceWith(fresh);
+      el = fresh;
+    }
+    have.delete(it.key);
+    if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null);
   });
+  have.forEach(el => el.remove());
 }
 
-function proposalList(props) {
-  const of = kinds => props.filter(t => kinds.includes(t.kind));
-  const fixes = props.filter(t => !["feature", "refactor"].includes(t.kind));
-  return proposalGroup("Návrhy: nové features", of(["feature"])) + proposalGroup("Návrhy: bugy a opravy", fixes)
-    + proposalGroup("Návrhy: úklid kódu", of(["refactor"]));
+const GROUPS = [["", "Vše"], ["decide", "Rozhodnout"], ["pr", "PR"], ["prop", "Návrhy"], ["lesson", "Lekce"]];
+
+function renderInbox(all) {
+  const shown = all.filter(i => (!typeFilter || i.group === typeFilter) && (!selected || !i.project || i.project === selected));
+  const count = g => all.filter(i => !g || i.group === g).reduce((a, i) => a + i.n, 0);
+  $("inboxCount").textContent = count("");
+  const fkey = JSON.stringify([GROUPS.map(([g]) => count(g)), typeFilter]);
+  if (fkey !== keys.filter) {
+    keys.filter = fkey;
+    $("inboxFilter").innerHTML = GROUPS.map(([g, label]) =>
+      `<button data-a="filter" data-type="${g}" aria-pressed="${g === typeFilter}">${label} ${count(g)}</button>`).join("");
+  }
+  $("inboxEmpty").hidden = shown.length > 0;
+  $("inboxEmpty").textContent = `Nic nečeká. ${!serveOn ? "Serve neběží." : paused ? "Autorun je vypnutý." : "Autorun běží."}`;
+  reconcile($("inbox"), shown);
 }
 
-function proposalGroup(heading, props) {
-  if (!props.length) return "";
-  return `<h4>${heading}</h4><ul>${props.map(t => `<li class="prop">
-      <details><summary title="${esc(t.title)}"><span class="muted">P${t.priority}</span>
-        ${t.kind && !["feature", "refactor"].includes(t.kind) ? `<span class="tag">${esc(t.kind)}</span>` : ""} ${esc(t.title)}</summary>
-      ${t.description ? `<p>${esc(t.description)}</p>` : ""}</details>
-      <button data-task="${esc(t.id)}" data-do="approve" title="Schválit → fronta" aria-label="Schválit" ${serveOn ? "" : "disabled"}>✅</button>
-      <button data-task="${esc(t.id)}" data-do="edit" title="Upravit" aria-label="Upravit" ${serveOn ? "" : "disabled"}>✏️</button>
-      <button data-task="${esc(t.id)}" data-do="reject" title="Zamítnout" aria-label="Zamítnout" ${serveOn ? "" : "disabled"}>❌</button></li>`).join("")}</ul>`;
+/* ---------- projects ---------- */
+
+const prTitle = pr => pr.title.replace(/^\[harness\]\s*/, "");
+
+function prLine(project, pr) {
+  return `<span class="muted">#${pr.number}</span>
+    <a class="t sens" href="${esc(pr.url)}" target="_blank" rel="noopener" title="${esc(pr.title)}">${esc(prTitle(pr))}</a>
+    ${pr.isDraft ? `<span class="tag draft">draft</span>` : ""}${ciTag(pr)}<span class="muted">${age(pr.createdAt)}</span>
+    <button data-a="mergePr" data-project="${esc(project)}" data-number="${pr.number}"
+      title="Squash merge (draft se nejdřív označí ready), pak smaže větev a worktree">Merge</button>`;
 }
 
-function queueList(queue) {
-  if (!queue.length) return "";
-  return `<details><summary>Fronta (${queue.length})</summary><ul>${queue.map(t => `<li class="prop">
-      <details><summary title="${esc(t.title)}"><span class="muted">P${t.priority}</span> ${esc(t.title)}</summary>
-        ${t.description ? `<p>${esc(t.description)}</p>` : ""}</details>
-      <button data-task="${esc(t.id)}" data-do="unqueue" title="Vrátit do návrhů" ${serveOn ? "" : "disabled"}>↩ zpět do návrhů</button></li>`).join("")}</ul></details>`;
-}
-
-function cleanupInfo(c) {
-  if (!c) return `<span class="muted" title="Revize čistoty kódu zatím neproběhla">🧹 bez revize</span>`;
+function cleanupBadge(c) {
+  if (!c) return `<span class="b dim" title="Revize čistoty kódu zatím neproběhla">🧹 —</span>`;
   const days = Math.floor((Date.now() / 1000 - c.ts) / 86400);
-  const prs = c.prs === null ? "? PR" : `<b>${c.prs}</b> PR`;
-  return `<span title="Poslední revize čistoty kódu ${new Date(c.ts * 1000).toLocaleDateString("cs")}; PR = zmergované od té doby">
-    🧹 <b>${days}</b> ${days === 1 ? "den" : days >= 2 && days <= 4 ? "dny" : "dní"} · ${prs} od revize</span>`;
+  const title = `Poslední revize čistoty kódu ${new Date(c.ts * 1000).toLocaleDateString("cs")}; PR zmergované od té doby: ${c.prs === null ? "?" : c.prs}`;
+  return `<span class="b ${days > 30 ? "dim" : ""}" title="${esc(title)}">🧹 ${days} d${c.prs === null ? "" : ` · ${c.prs} PR`}</span>`;
 }
 
-function renderProjects(projects, proposals) {
-  agentResolving = projects.some(p => (p.prs || []).some(pr => pr.conflict && pr.conflict.state === "resolving"));
-  const key = JSON.stringify([projects, proposals, serveOn]);
-  if (key === projectsKey) return;  // keep opened descriptions open between refreshes
-  projectsKey = key;
-  $("projects").innerHTML = projects.map(p => {
-    const c = p.counts;
-    const prs = p.prs === null ? `<span class="muted">PR nejdou načíst (gh)</span>`
-      : p.prs.length ? `<ul>${p.prs.map(pr => `<li class="pr"><span class="muted">#${pr.number}</span>
-          <a href="${esc(pr.url)}" target="_blank" rel="noopener" title="${esc(pr.title)}">${esc(pr.title.replace(/^\[harness\]\s*/, ""))}</a>
-          ${pr.isDraft ? `<span class="tag draft">draft</span>` : ""}${ciTag(pr)}<span class="muted">${age(pr.createdAt)}</span>
-          <button data-merge data-project="${esc(p.name)}" data-number="${pr.number}"
-            title="Squash merge (draft se nejdřív označí ready), pak smaže větev a worktree">Merge</button></li>
-          ${conflictBox(p.name, pr)}`).join("")}</ul>`
-      : `<span class="muted">žádné otevřené PR</span>`;
-    return `<section><h3 class="pname">${esc(p.name)}</h3>
-      <div class="counts"><span><b>${c[" "]}</b> ve frontě</span><span><b>${c["~"]}</b> návrhů</span>
-        <span><b>${c["x"]}</b> hotovo</span>${c["?"] ? `<span style="color:var(--warn)"><b>${c["?"]}</b> nejasné</span>` : ""}
-        ${cleanupInfo(p.cleanup)}
-        ${p.plan ? `<span title="ROADMAP.md: podle něj scout navrhuje features">📘 plán</span>` : `<span class="muted" title="Bez ROADMAP.md navrhuje scout features bez směru">📘 bez plánu</span>`}
-        <button class="small" data-plan-cc="${esc(p.name)}" title="Otevře Claude Code ve Windows Terminalu v adresáři projektu">${p.plan ? "Upravit plán v CC" : "Vytvořit plán v CC"}</button></div>
-      ${p.plan ? `<details data-plan="${esc(p.name)}"><summary>Projektový plán</summary><pre class="plan">načítám…</pre></details>` : ""}
-      ${queueList(p.queue || [])}
-      ${prs}${proposalList(proposals.filter(t => t.project === p.name))}
-      <details><summary>+ úkol</summary>
-        <form data-add="${esc(p.name)}" class="row" style="flex-wrap:wrap">
-          <input type="text" name="title" required placeholder="titulek" aria-label="Titulek úkolu">
-          <select name="priority" aria-label="Priorita"><option value="1">P1</option><option value="2" selected>P2</option><option value="3">P3</option></select>
-          <textarea name="description" rows="2" placeholder="popis" aria-label="Popis" style="flex-basis:100%"></textarea>
-          <input type="text" name="done" placeholder="Hotovo = …" aria-label="Hotovo =" style="flex-basis:100%">
-          <button class="primary" ${serveOn ? "" : "disabled"}>Přidat</button></form></details></section>`;
-  }).join("");
-  $("projects").querySelectorAll("[data-add]").forEach(f => f.onsubmit = e => {
-    e.preventDefault();
-    const v = f.elements;
-    act("add", {project: f.dataset.add, title: v.title.value, description: v.description.value, done: v.done.value, priority: +v.priority.value});
-  });
-  $("projects").querySelectorAll("[data-merge]").forEach(b => b.onclick = () => mergePr(b));
-  $("projects").querySelectorAll("[data-plan-cc]").forEach(b => b.onclick = () => planSession(b.dataset.planCc));
-  $("projects").querySelectorAll("details[data-plan]").forEach(d => d.ontoggle = () => loadPlan(d));
-  $("projects").querySelectorAll("[data-conflict]").forEach(b => b.onclick = () => settleConflict(b));
-  $("projects").querySelectorAll("[data-do=unqueue]").forEach(b => b.onclick = () => act("unqueue", {task: b.dataset.task}));
-  $("projects").querySelectorAll("[data-do=approve]").forEach(b => b.onclick = () => act("approve", {task: b.dataset.task}));
-  $("projects").querySelectorAll("[data-do=reject]").forEach(b => b.onclick = () => askReason(b));
-  $("projects").querySelectorAll("[data-do=edit]").forEach(b => b.onclick = () => editProposal(b, proposals.find(t => t.id === b.dataset.task)));
+function prBadge(p) {
+  if (p.prs === null) return `<span class="b bad" title="PR nejdou načíst (gh)">PR ?</span>`;
+  if (!p.prs.length) return "";
+  const bad = p.prs.some(x => x.ci === "fail" || x.mergeable === "CONFLICTING" || (x.conflict && x.conflict.state !== "kept"));
+  return `<span class="b ${bad ? "bad" : ""}" title="${bad ? "PR s červeným CI nebo konfliktem" : "otevřená PR"}">${bad ? "✗ " : ""}${p.prs.length} PR</span>`;
 }
 
-function editProposal(button, t) {
+function projectRow(p, waiting) {
+  const c = p.counts, num = (n, label, extra = "") => `<span class="b ${n ? extra : "dim"}">${n} ${label}</span>`;
+  return `<div class="prow ${selected === p.name ? "sel" : ""}" data-a="select" data-name="${esc(p.name)}">
+    <input type="checkbox" class="scope" value="${esc(p.name)}" ${excluded.has(p.name) ? "" : "checked"} aria-label="Zahrnout do běhu: ${esc(p.name)}" title="Zahrnout do spuštěného běhu">
+    <span class="name sens">${esc(p.name)}</span>
+    ${waiting ? `<span class="b wait" title="Čeká na tebe v Inboxu">! ${waiting}</span>` : ""}
+    ${prBadge(p)}${num(c[" "], "fronta")}${num(c["~"], "návrhů")}${num(c["?"], "nejasné", "wait")}
+    ${cleanupBadge(p.cleanup)}${p.plan ? "" : `<span class="b dim" title="Bez ROADMAP.md navrhuje scout features bez směru">bez plánu</span>`}</div>`;
+}
+
+function renderProjects(o, items) {
+  agentResolving = o.projects.some(p => (p.prs || []).some(pr => pr.conflict && pr.conflict.state === "resolving"));
+  const waiting = name => items.filter(i => i.project === name).reduce((a, i) => a + i.n, 0);
+  const sorted = [...o.projects].sort((a, b) => waiting(b.name) - waiting(a.name));
+  $("projCount").textContent = o.projects.length;
+  const key = JSON.stringify([sorted, sorted.map(p => waiting(p.name)), selected, [...excluded], serveOn]);
+  if (key === keys.projects) return;
+  keys.projects = key;
+  $("projects").innerHTML = sorted.map(p => projectRow(p, waiting(p.name))).join("");
+}
+
+function renderDetail(o) {
+  const p = o.projects.find(p => p.name === selected);
+  $("detail").hidden = !p;
+  if (!p) { keys.detail = keys.detailStatic = ""; return; }
+  const dkey = JSON.stringify([p, serveOn]);
+  if (dkey !== keys.detail) {
+    keys.detail = dkey;
+    $("detailData").innerHTML = p.prs === null ? `<span class="muted">PR nejdou načíst (gh)</span>`
+      : p.prs.length ? `<ul>${p.prs.map(pr => `<li class="pr">${prLine(p.name, pr)}</li>`).join("")}</ul>` : `<span class="muted">žádné otevřené PR</span>`;
+  }
+  // the form and the plan viewer render once per selection: refreshes must not wipe what is typed
+  const skey = `${p.name}:${p.plan}`;
+  if (skey === keys.detailStatic) return;
+  keys.detailStatic = skey;
+  $("detailHead").innerHTML = `${chip(p.name)}<span class="spacer"></span><button class="small" data-a="clearSel" title="Zavřít detail">✕</button>`;
+  $("detailStatic").innerHTML = `
+    <div class="row"><button class="small" data-a="planCC" data-project="${esc(p.name)}" title="Otevře Claude Code ve Windows Terminalu v adresáři projektu">${p.plan ? "Upravit plán v CC" : "Vytvořit plán v CC"}</button></div>
+    ${p.plan ? `<details data-plan="${esc(p.name)}"><summary>📘 Projektový plán</summary><pre class="plan sens">načítám…</pre></details>` : ""}
+    <details><summary>+ úkol</summary>
+      <form data-form="add" data-project="${esc(p.name)}" class="row" style="margin-top:6px">
+        <input type="text" name="title" required placeholder="titulek" aria-label="Titulek úkolu">
+        <select name="priority" aria-label="Priorita"><option value="1">P1</option><option value="2" selected>P2</option><option value="3">P3</option></select>
+        <textarea name="description" rows="2" placeholder="popis" aria-label="Popis" style="flex-basis:100%"></textarea>
+        <input type="text" name="done" placeholder="Hotovo = …" aria-label="Hotovo =" style="flex-basis:100%">
+        <button class="primary" ${dis()}>Přidat</button></form></details>`;
+}
+
+function editProposal(button) {
+  const t = proposals.find(t => t.id === button.dataset.task);
   if (!t) return;
   const rows = t.description ? t.description.split("\n") : [];
   const done = (rows.find(r => r.startsWith("Hotovo = ")) || "").slice(9);
   const text = rows.filter(r => !r.startsWith("Hotovo = ") && !r.startsWith("ACCEPT:")).join("\n");
-  const li = button.closest("li");
-  li.innerHTML = `<form class="row" style="flex:1;flex-wrap:wrap">
+  button.closest("li").innerHTML = `<form class="row" data-form="edit" data-task="${esc(t.id)}" style="flex:1">
       <input type="text" name="title" required value="${esc(t.title)}" aria-label="Titulek úkolu">
       <select name="priority" aria-label="Priorita">${[1, 2, 3].map(p => `<option value="${p}"${p === t.priority ? " selected" : ""}>P${p}</option>`).join("")}</select>
       <textarea name="description" rows="3" aria-label="Popis" style="flex-basis:100%">${esc(text)}</textarea>
       <input type="text" name="done" value="${esc(done)}" placeholder="Hotovo = …" aria-label="Hotovo =" style="flex-basis:100%">
       <button class="primary" value="0">Uložit</button><button class="primary" value="1">Uložit a schválit</button>
-      <button type="button">Zpět</button></form>`;
-  const f = li.querySelector("form");
-  f.onsubmit = e => {
-    e.preventDefault();
-    const v = f.elements;
-    act("edit", {task: t.id, title: v.title.value, description: v.description.value, done: v.done.value,
-      priority: +v.priority.value, approve: e.submitter.value === "1"});
-  };
-  li.querySelector("button[type=button]").onclick = () => { projectsKey = ""; refresh(); };
+      <button type="button" data-a="back">Zpět</button></form>`;
 }
 
 function askReason(button) {
   // optional reason: the reflection learns from it (phase 5)
-  const li = button.closest("li");
-  li.innerHTML = `<form class="row" style="flex:1"><input type="text" aria-label="Proč zamítnout (nepovinné)"
-      placeholder="proč? (nepovinné)"><button class="primary">Zamítnout</button><button type="button">Zpět</button></form>`;
-  const input = li.querySelector("input");
-  input.focus();
-  li.querySelector("form").onsubmit = e => { e.preventDefault(); act("reject", {task: button.dataset.task, reason: input.value}); };
-  li.querySelector("button[type=button]").onclick = () => { projectsKey = ""; refresh(); };
+  button.closest("li").innerHTML = `<form class="row" data-form="reject" data-task="${esc(button.dataset.task)}" style="flex:1">
+      <input type="text" name="reason" aria-label="Proč zamítnout (nepovinné)" placeholder="proč? (nepovinné)">
+      <button class="primary">Zamítnout</button><button type="button" data-a="back">Zpět</button></form>`;
+  $("inbox").querySelector("form[data-form=reject] input").focus();
 }
 
 function renderLessons(list) {
-  const key = JSON.stringify([list, serveOn]);
-  if (key === lessonsKey) return;
-  lessonsKey = key;
-  const proposed = list.filter(l => l.status === "proposed"), active = list.filter(l => l.status === "active");
-  $("lessonsBox").hidden = !list.length;
-  const row = (l, buttons) => `<li class="prop"><span class="tag">${esc(l.project)}</span>
-      <span style="flex:1;min-width:0">${esc(l.text)}</span>${buttons(l)}</li>`;
-  const btn = (l, approve, label, title) => `<button data-lesson="${esc(l.id)}" data-project="${esc(l.project)}"
-      data-approve="${approve}" title="${title}" aria-label="${title}" ${serveOn ? "" : "disabled"}>${label}</button>`;
-  $("lessons").innerHTML = (proposed.length ? `<h4>Ke schválení</h4><ul>${proposed.map(l =>
-        row(l, l => btn(l, 1, "✅", "Platí") + btn(l, 0, "❌", "Zahodit"))).join("")}</ul>` : "")
-    + (active.length ? `<details><summary>Aktivní lekce (${active.length})</summary><ul>${active.map(l =>
-        row(l, l => btn(l, 0, "vyřadit", "Vyřadit"))).join("")}</ul></details>` : "");
-  $("lessons").querySelectorAll("[data-lesson]").forEach(b => b.onclick = () =>
-    act("lesson", {project: b.dataset.project, id: b.dataset.lesson, approve: b.dataset.approve === "1"}));
+  const active = list.filter(l => l.status === "active");
+  $("lessonsBox").hidden = !active.length;
+  const key = JSON.stringify([active, serveOn]);
+  if (key === keys.lessons) return;
+  keys.lessons = key;
+  $("lessons").innerHTML = `<details><summary>Aktivní lekce (${active.length})</summary><ul style="margin-top:6px">${active.map(l =>
+    `<li class="prop">${chip(l.project)}<span class="sens" style="flex:1;min-width:0">${esc(l.text)}</span>
+      <button data-a="lesson" data-lesson="${esc(l.id)}" data-project="${esc(l.project)}" data-approve="0" title="Vyřadit" aria-label="Vyřadit" ${dis()}>vyřadit</button></li>`).join("")}</ul></details>`;
+}
+
+/* ---------- usage ---------- */
+
+const meter = pct => `<div class="meter ${pct >= 70 ? "high" : ""}"><div style="width:${Math.min(pct, 100)}%"></div></div>`;
+
+function quotaMeta(label, w, source) {
+  const reset = w.resets_at ? new Date(w.resets_at * 1000).toLocaleString("cs-CZ", {weekday: "short", hour: "2-digit", minute: "2-digit"}) : "?";
+  return `${label} · reset ${reset} · ${source}`;
+}
+
+// subscription cost is only the SDK's list-price estimate; API cost was really paid — never one number
+function costLabel(cost, paid) {
+  const est = cost - paid, parts = [];
+  if (est.toFixed(2) !== "0.00") parts.push(`≈$${est.toFixed(2)} odhad (subscription)`);
+  if (paid.toFixed(2) !== "0.00") parts.push(`$${paid.toFixed(2)} zaplaceno (API)`);
+  return parts.join(" + ") || "$0.00";
+}
+
+function renderQuota(u) {
+  const rl = u.rate_limit, source = rl && rl.status === "live" ? "živě" : "z posledního běhu";
+  const chipOf = (label, pct, title, fallback = "") => `<span class="qchip" title="${esc(title)}"><span class="muted">${label}</span>
+    ${pct == null ? `<b>${fallback}</b>` : `${meter(pct)}<b>${pct} %</b>`}</span>`;
+  const parts = [];
+  if (rl) {
+    const pct = rl.utilization == null ? null : Math.round(rl.utilization * 100);
+    // the live endpoint can fail; the SDK fallback reports utilization only near the limit (allowed_warning)
+    parts.push(chipOf("5h", pct, quotaMeta("5h okno", rl, source) + (pct == null ? " · pod hranicí varování, přesné % SDK nehlásí" : ""),
+      rl.status === "rejected" ? "vyčerpáno" : "OK"));
+  }
+  if (u.seven_day) {
+    const pct = Math.round(u.seven_day.utilization * 100);
+    parts.push(chipOf("7 dní", pct, quotaMeta("7 dní", u.seven_day, source)));
+  }
+  $("quotaMini").innerHTML = parts.join("") || `<span class="muted">kvóta: žádný běh zatím nenahlásil využití</span>`;
 }
 
 function renderUsage(u) {
-  const rl = u.rate_limit;
-  if (rl) {
-    const pct = rl.utilization == null ? null : Math.round(rl.utilization * 100);
-    const source = rl.status === "live" ? "živě" : "z posledního běhu";
-    $("quota").classList.remove("muted");
-    // the live endpoint can fail; the SDK fallback reports utilization only near the limit (allowed_warning)
-    $("quota").innerHTML = (pct == null ? `<div class="big">${rl.status === "rejected" ? "vyčerpáno" : "OK"}</div><div class="muted">pod hranicí varování, přesné % SDK nehlásí</div>` :
-      `<div class="big">${pct} %</div>${meter(pct)}`) + quotaMeta("5h okno", rl, source)
-      + (u.seven_day ? `<div style="margin-top:8px">${meter(Math.round(u.seven_day.utilization * 100))}</div>${quotaMeta(`7 dní ${Math.round(u.seven_day.utilization * 100)} %`, u.seven_day, source)}` : "");
-  }
+  renderQuota(u);
   const days = [];
   for (let i = 13; i >= 0; i--) days.push(new Date(Date.now() - i * 864e5).toLocaleDateString("sv-SE"));
   const per = Object.fromEntries(days.map(d => [d, {tokens: 0, cost: 0, paid: 0}]));
@@ -695,39 +693,10 @@ function renderUsage(u) {
   $("cost").textContent = `dnes ${today.tokens.toLocaleString("cs-CZ")} tokenů · 14 dní ${costLabel(sum("cost"), sum("paid"))}`;
 }
 
-const meter = pct => `<div class="meter ${pct >= 70 ? "high" : ""}"><div style="width:${Math.min(pct, 100)}%"></div></div>`;
-
-function quotaMeta(label, w, source) {
-  const reset = w.resets_at ? new Date(w.resets_at * 1000).toLocaleString("cs-CZ", {weekday: "short", hour: "2-digit", minute: "2-digit"}) : "?";
-  return `<span class="muted">${esc(label)} · reset ${esc(reset)} · ${esc(source)}</span>`;
-}
-
-// subscription cost is only the SDK's list-price estimate; API cost was really paid — never one number
-function costLabel(cost, paid) {
-  const est = cost - paid, parts = [];
-  if (est.toFixed(2) !== "0.00") parts.push(`≈$${est.toFixed(2)} odhad (subscription)`);
-  if (paid.toFixed(2) !== "0.00") parts.push(`$${paid.toFixed(2)} zaplaceno (API)`);
-  return parts.join(" + ") || "$0.00";
-}
-
-function renderMerges(list) {
-  $("mergeBox").hidden = !list.length;
-  const key = JSON.stringify(list.map(m => m.id));
-  if (key === mergesKey) return;  // keep an opened description open
-  mergesKey = key;
-  $("merges").innerHTML = list.map(m => `<div class="item">
-      <div><b>[${esc(m.project)}]</b> ${m.titles.map(esc).join(" + ")}</div>
-      <details><summary>→ ${esc(m.title)}</summary>${m.why ? `<p class="muted">${esc(m.why)}</p>` : ""}
-        <p>${esc(m.description)}</p>${m.done ? `<p>Hotovo = ${esc(m.done)}</p>` : ""}</details>
-      <div class="row"><button class="primary" data-merge-id="${esc(m.id)}" data-accept="1" title="Nový návrh místo původních, ty se označí jako sloučené">Sloučit</button>
-        <button data-merge-id="${esc(m.id)}" title="Nechat návrhy zvlášť, tahle skupina se už nenabídne">Ignorovat</button></div></div>`).join("");
-  $("merges").querySelectorAll("[data-merge-id]").forEach(b => b.onclick = () => act("merge", {id: b.dataset.mergeId, accept: !!b.dataset.accept}));
-}
+/* ---------- loop ---------- */
 
 async function planSession(name) {
-  const r = await fetch(`/projects/${encodeURIComponent(name)}/plan/session`, {method: "POST"});
-  const data = await r.json().catch(() => ({}));
-  toast(r.ok ? data.message : (data.detail || `chyba ${r.status}`));
+  await call(`/projects/${encodeURIComponent(name)}/plan/session`);
 }
 
 async function loadPlan(d) {
@@ -737,22 +706,28 @@ async function loadPlan(d) {
   d.dataset.loaded = "1";
 }
 
+function render(o) {
+  O = o;
+  proposals = o.proposals;
+  if (selected && !o.projects.some(p => p.name === selected)) selected = null;
+  renderStatus(o.serve);
+  renderLimits(o.limits);
+  renderRunSub();
+  const items = inboxItems(o);
+  renderInbox(items);
+  renderProjects(o, items);
+  renderDetail(o);
+  renderLessons(o.serve ? o.serve.lessons : []);
+}
+
 async function refresh() {
   try {
     const o = await (await fetch("/overview")).json();
     if (boot !== null && o.boot !== boot) return location.reload();  // serve restarted: load the new page
     boot = o.boot;
-    renderStatus(o.serve);
-    renderPlan(o.serve && o.serve.plan);
-    renderQuestions(o.serve ? o.serve.questions : []);
-    renderMerges(o.serve ? o.serve.merges : []);
-    renderScope(o.projects);
-    renderLimits(o.limits);
-    renderRunSub(o.projects);
+    render(o);
     refreshFlow(o.serve && o.serve.run);
-    renderProjects(o.projects, o.proposals);
-    renderLessons(o.serve ? o.serve.lessons : []);
-  } catch (e) { $("status").innerHTML = `<span style="color:var(--bad)">dashboard nedostupný</span>`; }
+  } catch (e) { $("status").innerHTML = `<span style="color:var(--bad)">dashboard nedostupný</span>`; keys.status = ""; }
 }
 async function refreshUsage() {
   try { renderUsage(await (await fetch("/usage")).json()); } catch (e) {}
@@ -766,70 +741,73 @@ $("historyDay").value = new Date().toLocaleDateString("sv");  // sv locale = YYY
 $("historyDay").onchange = loadHistory;
 loadHistory();
 
-function setMode(cls, on) {
-  // parody skin and blur are per-viewer looks: body class + localStorage, no server state
-  document.body.classList.toggle(cls, on);
-  $(cls + "Toggle").setAttribute("aria-pressed", on);
-  try { localStorage.setItem(cls, on ? "1" : ""); } catch (e) {}
-  if (cls === "samm") document.querySelectorAll("[data-samm]").forEach(el => {
-    el.dataset.orig ??= el.textContent;
-    el.textContent = on ? el.dataset.samm : el.dataset.orig;
-  });
+function setBlur(on) {
+  // a per-viewer look: body class + localStorage, no server state
+  document.body.classList.toggle("blurred", on);
+  $("blurredToggle").setAttribute("aria-pressed", on);
+  try { localStorage.setItem("blurred", on ? "1" : ""); } catch (e) {}
 }
-
-for (const cls of ["samm", "blurred"]) {
-  let on = false;
-  try { on = localStorage.getItem(cls) === "1"; } catch (e) {}
-  setMode(cls, on);
-  $(cls + "Toggle").onclick = () => setMode(cls, !document.body.classList.contains(cls));
-}
-
-// each cow walks to a random spot on the meadow (lower 45 % of the screen), grazes a while, picks another;
-// depth: higher up = farther = smaller and behind
-function herd() {
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const spot = c => Object.assign(c, {tx: Math.random() * (innerWidth - 180), ty: Math.random(), wait: Math.random() * 4});
-  const cows = [...document.querySelectorAll(".cow")].map(el => {
-    const c = spot({el, dir: 1});  // start somewhere random, then head somewhere else
-    return spot(Object.assign(c, {x: c.tx, y: c.ty}));
-  });
-  let last = performance.now();
-  requestAnimationFrame(function step(now) {
-    const dt = Math.min(now - last, 100) / 1000;
-    last = now;
-    if (document.body.classList.contains("samm")) for (const c of cows) walk(c, dt, still, spot);
-    requestAnimationFrame(step);
-  });
-}
-
-function walk(c, dt, still, spot) {
-  const top = innerHeight * .55, depth = innerHeight * .45 - 40;
-  if (!still) {
-    if (c.wait > 0) c.wait -= dt;
-    else {
-      const dx = c.tx - c.x, dy = (c.ty - c.y) * depth, d = Math.hypot(dx, dy), v = 45 * dt;
-      if (d < v) { spot(c); if (Math.random() < .4) idle(c); }
-      else { c.x += dx / d * v; c.y += dy / d * v / depth; if (Math.abs(dx) > 2) c.dir = Math.sign(dx); }
-    }
-  }
-  const s = .5 + .5 * c.y, feet = top + 20 + c.y * depth;
-  c.el.style.zIndex = Math.round(c.y * 100);
-  c.el.style.transform = `translate(${c.x}px, ${feet - c.el.offsetHeight}px) scale(${c.dir * s}, ${s})`;
-}
-
-function idle(c) {
-  // stand still while the logo bubble plays (.idle animations last 3.2 s)
-  c.wait = Math.max(c.wait, 3.4);
-  c.el.classList.add("idle");
-  setTimeout(() => c.el.classList.remove("idle"), 3300);
-}
-herd();
+let blurOn = false;
+try { blurOn = localStorage.getItem("blurred") === "1"; } catch (e) {}
+setBlur(blurOn);
+$("blurredToggle").onclick = () => setBlur(!document.body.classList.contains("blurred"));
 
 document.querySelectorAll("button.action").forEach(b => {
   b.onclick = () => act(b.dataset.act, runBody(b));
   b.onmouseenter = b.onfocus = () => preview(b);
   b.onmouseleave = b.onblur = unpreview;
 });
+
+// one delegated handler: cards and rows are re-rendered freely, so nothing is bound to them
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-a]");
+  if (!b || e.target.matches("input")) return;
+  const d = b.dataset;
+  switch (d.a) {
+    case "select": selected = selected === d.name ? null : d.name; keys.projects = ""; render(O); break;
+    case "clearSel": selected = null; keys.projects = ""; render(O); break;
+    case "scopeAll": excluded.clear(); saveExcluded(); keys.projects = ""; render(O); break;
+    case "filter": typeFilter = d.type; render(O); break;
+    case "auto": act(paused ? "resume" : "pause"); break;
+    case "planOk": act("plan", {keep: [...b.closest(".card").querySelectorAll("input:checked")].map(c => +c.value)}); break;
+    case "planQuit": act("plan", {keep: "q"}); break;
+    case "skipQ": act("answer", {id: d.id, text: ""}); break;
+    case "mergeProp": act("merge", {id: d.id, accept: !!d.accept}); break;
+    case "mergePr": mergePr(b); break;
+    case "conflict": settleConflict(b); break;
+    case "approve": act("approve", {task: d.task}); break;
+    case "approveAll": approveAll(d.ids.split(",")); break;
+    case "edit": editProposal(b); break;
+    case "reject": askReason(b); break;
+    case "back": b.closest(".card").dataset.sig = ""; refresh(); break;  // a different sig makes the next render rebuild the card
+    case "lesson": act("lesson", {project: d.project, id: d.lesson, approve: d.approve === "1"}); break;
+    case "planCC": planSession(d.project); break;
+  }
+});
+
+document.addEventListener("change", e => {
+  if (!e.target.matches("input.scope")) return;
+  e.target.checked ? excluded.delete(e.target.value) : excluded.add(e.target.value);
+  saveExcluded();
+  keys.projects = "";
+  renderRunSub();
+});
+
+document.addEventListener("submit", async e => {
+  const f = e.target, kind = f.dataset.form, v = f.elements;
+  if (!kind) return;
+  e.preventDefault();
+  if (kind === "answer") act("answer", {id: f.dataset.id, text: v.text.value});
+  else if (kind === "reject") act("reject", {task: f.dataset.task, reason: v.reason.value});
+  else if (kind === "edit") act("edit", {task: f.dataset.task, title: v.title.value, description: v.description.value, done: v.done.value,
+    priority: +v.priority.value, approve: e.submitter.value === "1"});
+  else if (kind === "add" && await act("add", {project: f.dataset.project, title: v.title.value, description: v.description.value,
+    done: v.done.value, priority: +v.priority.value})) f.reset();
+});
+
+// toggle does not bubble: capture it to load a project plan on first open
+document.addEventListener("toggle", e => { if (e.target.matches("details[data-plan]")) loadPlan(e.target); }, true);
+
 refresh(); refreshUsage();
 let ticks = 0;
 setInterval(() => { if (runActive || agentResolving || ++ticks % 5 === 0) refresh(); }, 3000);  // live while a run or conflict agent is active
@@ -837,7 +815,7 @@ setInterval(refreshUsage, 60000);
 
 // drag-to-scroll: Lively may not forward the wheel; a drag past 5px scrolls the column and swallows the click
 const NO_DRAG = "button, a, input, select, textarea, label, summary, pre";
-for (const col of document.querySelectorAll(".wrap > .col")) {
+for (const col of document.querySelectorAll(".cols > .col")) {
   let startY = null, startTop = 0, dragged = false;
   col.addEventListener("pointerdown", e => {
     dragged = false;
