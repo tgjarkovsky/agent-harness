@@ -68,3 +68,11 @@ def config_focus(cfg: Config) -> dict[str, int]:
         return {}
     path, days = cfg.secondbrain
     return focus(path, cfg.projects, days)
+
+
+def config_weights(cfg: Config) -> dict[str, int]:
+    return {n: p.weight for n, p in cfg.projects.items()}
+
+
+def rank_by_config(tasks: list[Task], cfg: Config, only=None) -> list[Task]:
+    return rank(tasks, set(only or cfg.projects), config_focus(cfg), config_weights(cfg))

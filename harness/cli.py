@@ -19,7 +19,7 @@ from .nodes.common import (make_approve, make_discover, make_pick_tasks, make_pr
                            make_report)
 from .nodes.real import git, real_explore, real_merge, sh, real_nodes, real_rank, real_reflect, worktree_path
 from .projects import load_config
-from .priority import config_focus, rank
+from .priority import config_focus, rank_by_config
 from .discover import format_plan, parse_approval
 from .runner import approvals, execute, pending, questions, run_config
 from .scan import proposal_lines, scan_all
@@ -270,8 +270,7 @@ def _read_backlog(home: Path) -> str:
 def cmd_queue(args) -> int:
     cfg = load_config(args.home / "projects.yaml")
     focus = config_focus(cfg)
-    ranked = rank(backlog.parse(_read_backlog(args.home)), set(cfg.projects), focus,
-                  {n: p.weight for n, p in cfg.projects.items()})
+    ranked = rank_by_config(backlog.parse(_read_backlog(args.home)), cfg)
     print("focus (secondbrain): " + (", ".join(f"{n}={c}" for n, c in focus.items()) if focus else "off"))
     for i, t in enumerate(ranked, 1):
         print(f"{i:>2}. P{t.priority} {t.id} [{t.project}] {t.title}")
