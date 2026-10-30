@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable
 
@@ -248,6 +249,19 @@ def git_run(args: list[str], cwd) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8")
 
 
+@contextmanager
+def pr_worktree(repo_dir, branch: str, prefix: str, fetch: tuple[str, ...], run: Callable[[list[str], object], object]):
+    """Throwaway detached worktree of origin/<branch>, removed on exit. `run` decides how git is invoked and which
+    error it raises."""
+    run(["fetch", "-q", "origin", *fetch], repo_dir)
+    wt = Path(tempfile.mkdtemp(prefix=prefix))
+    run(["worktree", "add", "-q", "--detach", str(wt), f"origin/{branch}"], repo_dir)
+    try:
+        yield wt
+    finally:
+        git_run(["worktree", "remove", "--force", str(wt)], repo_dir)
+
+
 def union_changelog(wt: Path) -> None:
     """Resolve a CHANGELOG.md conflict by keeping the lines of both sides (each PR appends its own entry)."""
     stages = {}
@@ -304,14 +318,9 @@ def changelog_fixable(pr: dict) -> bool:
 def resolve_changelog_conflict(repo_dir, branch: str, base: str) -> None:
     """Rebase a PR branch onto origin/base in a throwaway worktree and force-push it; a conflict only in
     CHANGELOG.md keeps both entries, any other conflict raises RuntimeError and pushes nothing."""
-    _must(git_run(["fetch", "-q", "origin", base, branch], repo_dir))
-    wt = Path(tempfile.mkdtemp(prefix="harness-rebase-"))
-    _must(git_run(["worktree", "add", "-q", "--detach", str(wt), f"origin/{branch}"], repo_dir))
-    try:
+    with pr_worktree(repo_dir, branch, "harness-rebase-", (base, branch), lambda a, c: _must(git_run(a, c))) as wt:
         _rebase_keeping_changelogs(wt, f"origin/{base}")
         _must(git_run(["push", "-q", f"--force-with-lease={branch}:origin/{branch}", "origin", f"HEAD:{branch}"], wt))
-    finally:
-        git_run(["worktree", "remove", "--force", str(wt)], repo_dir)
 
 
 def requeue_pr(repo_dir, number: int, branch: str) -> None:

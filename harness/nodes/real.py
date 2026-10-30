@@ -3,7 +3,6 @@ import os
 import re
 import subprocess
 import tempfile
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable
 
@@ -141,18 +140,6 @@ def _merge_base_in(wt: Path, base: str) -> list[str]:
     return traces.settle_changelog(wt)
 
 
-@contextmanager
-def _pr_worktree(p: Project, branch: str, prefix: str, fetch: tuple[str, ...]):
-    """Throwaway detached worktree of origin/<branch>, removed on exit."""
-    git(["fetch", "-q", "origin", *fetch], p.path)
-    wt = Path(tempfile.mkdtemp(prefix=prefix))
-    git(["worktree", "add", "-q", "--detach", str(wt), f"origin/{branch}"], p.path)
-    try:
-        yield wt
-    finally:
-        traces.git_run(["worktree", "remove", "--force", str(wt)], p.path)
-
-
 def _verify_or_raise(p: Project, wt: Path, after: str) -> None:
     for cmd in (*p.setup, *p.verify):
         ok, out = sh(cmd, wt)
@@ -165,7 +152,7 @@ def resolve_conflict_with_agent(p: Project, branch: str, billing: str) -> str:
     CHANGELOG.md and push only when setup + verify pass. RuntimeError says why nothing was pushed."""
     if err := check_billing(billing, os.environ):
         raise RuntimeError(err)
-    with _pr_worktree(p, branch, "harness-conflict-", (p.base, branch)) as wt:
+    with traces.pr_worktree(p.path, branch, "harness-conflict-", (p.base, branch), git) as wt:
         files = _merge_base_in(wt, p.base)
         if files:
             run_agent(render_prompt("resolve_conflict.md", base=p.base, files="\n".join(files)), cwd=wt,
@@ -196,7 +183,7 @@ def fix_ci_with_agent(p: Project, branch: str, billing: str) -> str:
     and the agent changed something. RuntimeError says why nothing was pushed."""
     if err := check_billing(billing, os.environ):
         raise RuntimeError(err)
-    with _pr_worktree(p, branch, "harness-ci-", (branch,)) as wt:
+    with traces.pr_worktree(p.path, branch, "harness-ci-", (branch,), git) as wt:
         r = run_agent(render_prompt("fix_ci.md", log=failed_ci_log(p, branch) or "(log unavailable, run the tests)"),
                       cwd=wt, model="sonnet", tools=WRITE_TOOLS, disallowed=NO_PUBLISH, max_turns=60)
         git(["add", "-A"], wt)
