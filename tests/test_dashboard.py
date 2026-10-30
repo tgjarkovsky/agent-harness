@@ -389,3 +389,14 @@ def test_history_returns_digest_of_a_day(client):
     body = client.get("/history?day=2026-10-02").json()
     assert body["day"] == "2026-10-02" and body["text"].startswith("\U0001F4CB Digest")
     assert client.get("/history?day=vcera").status_code == 400
+
+
+def test_overview_queue_is_ranked_and_only_holds_queued_tasks(tmp_path):
+    shutil.copytree(ROOT / "scenarios", tmp_path / "scenarios")
+    (tmp_path / "a").mkdir()
+    (tmp_path / "projects.yaml").write_text("projects:\n  alpha: {path: a, base: main, verify: [x]}\n", encoding="utf-8")
+    (tmp_path / "BACKLOG.md").write_text(
+        "# Backlog\n\n## alpha\n- [ ] P2 a-2 Druhý\n- [ ] P1 a-1 První\n- [~] P1 a-3 Návrh\n- [x] P1 a-4 Hotovo\n",
+        encoding="utf-8")
+    [alpha] = TestClient(create_app(tmp_path, prs=lambda path: [])).get("/overview").json()["projects"]
+    assert [t["id"] for t in alpha["queue"]] == ["a-1", "a-2"]
