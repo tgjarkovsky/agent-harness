@@ -17,6 +17,7 @@ RECUR_RE = re.compile(r"🔁\s*(every\b[^📅⏳✅🛫➕🔺⏫🔼🔽#]*)")
 RECUR_STEP_RE = re.compile(r"every\s+(?:(\d+)\s+)?(day|week|month|year)s?\b", re.IGNORECASE)
 TAG_RE = re.compile(r"(?<!\S)#([\w/-]+)")
 META_RE = re.compile(r"[📅⏳✅🛫➕]\s*\d{4}-\d{2}-\d{2}|🔁\s*every\b[^📅⏳✅🛫➕🔺⏫🔼🔽#]*|[🔺⏫🔼🔽]")
+LINK_RE = re.compile(r"\[([^\]\n]*)\]\((https?://[^)\s]+)\)")
 HEADER = "# TODO\n\n"
 
 
@@ -32,6 +33,7 @@ class Item:
     done_on: date | None
     priority: int
     recur: str | None
+    links: tuple[tuple[str, str], ...] = ()  # markdown [label](https://…) in the line, e.g. the source e-mail
 
     @property
     def key(self) -> str:
@@ -57,11 +59,13 @@ def parse_line(line_no: int, line: str) -> Item | None:
         return None
     body = m[2]
     recur = RECUR_RE.search(body)
-    title = " ".join(TAG_RE.sub("", META_RE.sub("", body)).split())
-    return Item(line_no, line, m[1].lower(), title, tuple(TAG_RE.findall(body)),
+    links = tuple((label, url) for label, url in LINK_RE.findall(body))
+    plain = LINK_RE.sub("", body)
+    title = " ".join(TAG_RE.sub("", META_RE.sub("", plain)).split())
+    return Item(line_no, line, m[1].lower(), title, tuple(TAG_RE.findall(plain)),
                 *(_date(body, s) for s in DATE_FIELD.values()),
                 next((p for s, p in PRIORITY.items() if s in body), NO_PRIORITY),
-                recur[1].strip() if recur else None)
+                recur[1].strip() if recur else None, links)
 
 
 def parse(text: str) -> list[Item]:
@@ -131,6 +135,12 @@ def today_items(items: list[Item], today: date) -> list[Item]:
     picked = [i for i in items if i.status == " "
               and ((i.when and i.when <= today) or (not i.when and i.priority <= PRIORITY["⏫"]))]
     return sorted(picked, key=lambda i: (i.when or today, i.priority, i.line_no))
+
+
+def due_between(items: list[Item], first: date, last: date) -> list[Item]:
+    """Open tasks with a deadline (📅) from `first` to `last`, soonest first."""
+    return sorted((i for i in items if i.status == " " and i.due and first <= i.due <= last),
+                  key=lambda i: (i.due, i.priority, i.line_no))
 
 
 

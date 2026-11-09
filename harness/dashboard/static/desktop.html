@@ -200,10 +200,13 @@
         <ul class="tl" id="timeline"></ul></section>
       <section><h2>Úkoly <span class="count" id="todoCount"></span></h2>
         <ul class="todo" id="todos"></ul>
+        <div id="soonBox" hidden><h2 style="margin-top:12px">⏰ Blíží se</h2><ul class="todo" id="soon"></ul></div>
         <form id="todoForm" data-form="todo" class="row">
           <input type="text" name="text" required placeholder="nový úkol… (zítra, pá, 2026-11-12)" aria-label="Nový úkol">
           <select name="project" aria-label="Projekt"><option value="">bez projektu</option></select>
           <button class="primary">Přidat</button></form></section>
+      <section id="suggestBox" hidden><h2>📬 Návrhy z mailu a kalendáře <span class="count" id="suggestCount"></span></h2>
+        <ul class="todo" id="suggestions"></ul></section>
     </div>
 
     <div class="col">
@@ -684,7 +687,19 @@ const hm = iso => iso.slice(11, 16);
 function todoLi(t) {
   const when = t.when ? `<span class="muted">${new Date(t.when).toLocaleDateString("cs", {day: "numeric", month: "numeric"})}</span>` : "";
   return `<li class="${t.late ? "late" : ""}"><button data-a="todoDone" data-key="${esc(t.key)}" title="Hotovo" aria-label="Hotovo: ${esc(t.title)}">✔</button>
-    <span class="t sens" title="${esc(t.title)}">${esc(t.title)}</span>${t.project ? chip(t.project) : ""}${when}</li>`;
+    <span class="t sens" title="${esc(t.title)}">${esc(t.title)}</span>${t.project ? chip(t.project) : ""}${when}${linksOf(t)}</li>`;
+}
+
+// markdown links of a task line, e.g. the source e-mail; only http(s) ever reaches here (agenda.LINK_RE)
+const linksOf = t => (t.links || []).map(([label, url]) =>
+  `<a href="${esc(url)}" target="_blank" rel="noopener" title="${esc(label)}">${label.startsWith("✉️") ? "✉️" : "🔗"}</a>`).join("");
+
+function suggestionLi(p) {
+  return `<li style="align-items:flex-start"><span style="flex:1;min-width:0"><span class="sens">${esc(p.title)}</span>
+      <br><span class="muted sens" style="font-size:13px">${esc(p.why)} · ${esc(p.origin)}</span></span>
+    ${p.mail_url ? `<a href="${esc(p.mail_url)}" target="_blank" rel="noopener" title="Otevřít mail">✉️</a>` : ""}
+    <button data-a="suggestion" data-id="${esc(p.id)}" data-accept="1" title="Přidat do úkolů" aria-label="Přidat: ${esc(p.title)}" ${dis()}>✅</button>
+    <button data-a="suggestion" data-id="${esc(p.id)}" title="Zahodit" aria-label="Zahodit: ${esc(p.title)}" ${dis()}>❌</button></li>`;
 }
 
 function renderAgenda(a) {
@@ -709,6 +724,11 @@ function renderAgenda(a) {
     : `<li class="muted">Žádné schůzky.</li>`;
   $("todoCount").textContent = a.tasks.length;
   $("todos").innerHTML = a.tasks.length ? a.tasks.map(todoLi).join("") : `<li class="muted">Na dnes nic.</li>`;
+  $("soonBox").hidden = !a.soon.length;
+  $("soon").innerHTML = a.soon.map(todoLi).join("");
+  $("suggestBox").hidden = !a.proposals.length;
+  $("suggestCount").textContent = a.proposals.length;
+  $("suggestions").innerHTML = a.proposals.map(suggestionLi).join("");
 }
 
 function renderProjectOptions(o) {
@@ -875,6 +895,7 @@ document.addEventListener("click", e => {
     case "planCC": planSession(d.project); break;
     case "dev": act("dev", {on: !devOn}); break;
     case "todoDone": b.disabled = true; agendaAct("todo_done", {key: d.key}); break;
+    case "suggestion": b.disabled = true; agendaAct(d.accept ? "suggestion_accept" : "suggestion_reject", {id: d.id}); break;
   }
 });
 

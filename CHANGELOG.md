@@ -109,3 +109,4 @@
 ## [2026-10-30] - Dashboard /desktop: Inbox ve více sloupcích, návrhy rozdělené podle typu, jedna pravá lišta
 ## [2026-11-09] - Osobní agenda: úkoly v secondbrain/TODO.md (Obsidian Tasks), Google Calendar, ranní plán dne s bloky na 1 klik, /todo /dnes /plan /dev, dashboard se sloupcem Dnes a přepínačem Dev
 ## [2026-11-09] - Google Kalendář přes tajnou iCal adresu (HARNESS_GCAL_ICS) místo OAuth, bloky jako předvyplněné odkazy do kalendáře
+## [2026-11-09] - Návrhy osobních úkolů z Gmailu (IMAP, heslo aplikace) a kalendáře 2× denně se schválením v Telegramu a dashboardu, připomínky termínů dnes/zítra, „Blíží se“ v plánu dne, harness suggest

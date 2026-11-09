@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
-from . import agenda, backlog, events, gcal, lessons, traces
+from . import agenda, backlog, events, gcal, lessons, suggest, traces
 from .discover import LENSES, apply_merge, parse_merges, safe_title, task_lines
 from .priority import rank, rank_by_config
 from .projects import Config, Idle
@@ -40,7 +40,8 @@ HELP = ("Příkazy:\n/todo <text> — osobní úkol (#projekt, dnes/zítra/pá/2
 def default_state(now: datetime) -> dict:
     return {"paused": False, "paused_projects": [], "run": None, "seq": 0, "offset": 0, "asked": {}, "answers": {}, "approval": None,
             "proposals_sent": [], "lessons_sent": [], "rejected_msgs": {}, "auto_tried": {}, "next_check": 0,
-            "last_scan": None, "dev": False,
+            "last_scan": None, "dev": False, "todo_props": [], "todo_decided": [], "suggest_seen": [],
+            "suggest_slot": None, "mail_since": None, "suggest_error": None, "reminded": {},
             "merge_checked": {}, "merges": [], "merge_ignored": [], "last_digest": now.date().isoformat(), "digest_since": now.timestamp()}
 
 
@@ -137,7 +138,9 @@ class Ctx:
     sh: Callable[[str, Path], tuple[bool, str]] = lambda cmd, cwd: (False, "no shell")  # nodes.real.sh in the real serve
     merge: Callable[[str, list], str] = lambda name, proposals: "[]"  # nodes.real.real_merge in the real serve
     facts: dict = field(default_factory=dict)  # project → Facts of the last autorun check, for /status
-    cal: object = None  # gcal.Calendar-like: events(day); None = no calendar
+    cal: object = None  # gcal.Calendar-like: events(day), upcoming(first, days); None = no calendar
+    mail: object = None  # mail.Inbox-like: new(since) -> list[Mail]; None = no e-mail
+    suggest_model: Callable[[str], str] = lambda prompt: "[]"  # a tool-less model call in the real serve
 
 
 def say(ctx: Ctx, text: str, buttons: Buttons | None = None) -> int | None:
@@ -732,15 +735,24 @@ def _block_json(b: agenda.Block, projects) -> dict:
             "link": gcal.add_link(b.start, b.end, BLOCK_SIGN + b.item.title, f"#{project}" if project else "")}
 
 
+def _task_json(i: agenda.Item, projects, day) -> dict:
+    return {"title": i.title, "key": i.key, "project": i.project(projects), "late": bool(i.when and i.when < day),
+            "line": i.line.strip(), "when": i.due and i.due.isoformat(), "links": [list(x) for x in i.links]}
+
+
 def agenda_data(ctx: Ctx, day) -> dict:
     """The day for the morning plan and the dashboard: meetings, tasks, proposed time blocks."""
     a = ctx.cfg.agenda
     if a is None:
         return {"configured": False}
-    tasks = agenda.today_items(agenda.parse(agenda.read(a.todo)), day)
+    items = agenda.parse(agenda.read(a.todo))
+    tasks = agenda.today_items(items, day)
+    soon = agenda.due_between(items, day + timedelta(days=1), day + timedelta(days=a.soon_days))
     out = {"configured": True, "day": day.isoformat(), "error": None, "events": [], "blocks": [],
-           "tasks": [{"title": i.title, "key": i.key, "project": i.project(ctx.cfg.projects),
-                      "late": bool(i.when and i.when < day), "line": i.line.strip()} for i in tasks]}
+           "tasks": [_task_json(i, ctx.cfg.projects, day) for i in tasks],
+           "soon": [_task_json(i, ctx.cfg.projects, day) for i in soon],
+           "proposals": [{k: p[k] for k in ("id", "title", "why", "origin", "line", "mail_url")}
+                         for p in ctx.state["todo_props"]] if hasattr(ctx, "state") else []}
     if ctx.cal is None:
         out["error"] = f"kalendář není připojený (proměnná {gcal.ENV}, pak restart serve)"
         return out
@@ -763,6 +775,10 @@ def _hm(iso: str) -> str:
     return iso[11:16]
 
 
+def _dm(iso: str) -> str:
+    return f"{int(iso[8:10])}. {int(iso[5:7])}."
+
+
 def day_plan(ctx: Ctx, day) -> tuple[str, Buttons | None]:
     d = agenda_data(ctx, day)
     lines = [f"☀️ Plán dne {day.day}. {day.month}."]
@@ -775,12 +791,121 @@ def day_plan(ctx: Ctx, day) -> tuple[str, Buttons | None]:
     tasks = [f"• {t['title']}" + (f" [{t['project']}]" if t["project"] else "") + (" ⚠️ po termínu" if t["late"] else "")
              for t in d["tasks"]]
     lines += ["", "✅ Úkoly", *(tasks or ["nic na dnes"])]
+    if d["soon"]:
+        lines += ["", "⏰ Blíží se", *(f"• {_dm(t['when'])} {t['title']}" + (f" [{t['project']}]" if t["project"] else "")
+                                      for t in d["soon"])]
     if d["blocks"]:
         lines += ["", "🎯 Návrh bloků (tlačítko otevře Google Kalendář, ulož)",
                   *(f"{_hm(b['start'])}–{_hm(b['end'])} {b['title']}" for b in d["blocks"])]
     buttons = [[(f"📅 {_hm(b['start'])} {b['title'][:36]}", b["link"])] for b in d["blocks"]] \
         + [[(f"✔ {t['title'][:40]}", f"td:{t['key']}")] for t in d["tasks"][:8]]
     return "\n".join(lines), buttons or None
+
+
+def _suggest_slot(ctx: Ctx) -> str | None:
+    """The latest suggest_at time already passed today, unless it ran; None = nothing to do."""
+    a, now = ctx.cfg.agenda, ctx.now()
+    if a is None or (ctx.mail is None and ctx.cal is None):
+        return None
+    due = [t for t in a.suggest_at if now.time() >= t]
+    slot = due and f"{now.date().isoformat()} {max(due):%H:%M}"
+    return slot if slot and ctx.state["suggest_slot"] != slot else None
+
+
+def _remember(ctx: Ctx, key: str, values, cap: int) -> None:
+    ctx.state[key] = (ctx.state[key] + [v for v in values if v not in ctx.state[key]])[-cap:]
+
+
+def _gather(ctx: Ctx, since: datetime, today, seen: set) -> tuple[list, list, list[str]]:
+    """New e-mails and calendar events nobody has looked at yet; a failing source is reported, not fatal."""
+    mails, evs, errors = [], [], []
+    if ctx.mail is not None:
+        try:
+            mails = [m for m in ctx.mail.new(since) if f"mail:{m.msgid}" not in seen]
+        except Exception as e:  # a wrong app password, Gmail down
+            errors.append(f"mail: {type(e).__name__}: {str(e)[:200]}")
+    if ctx.cal is not None:
+        try:
+            evs = [e for e in ctx.cal.upcoming(today, 14) if suggest.event_key(e) not in seen]
+        except Exception as e:
+            errors.append(f"kalendář: {type(e).__name__}: {str(e)[:200]}")
+    return mails, evs, errors
+
+
+def _maybe_suggest(ctx: Ctx) -> None:
+    slot = _suggest_slot(ctx)
+    if not slot or _quota_reserved(ctx):
+        return
+    ctx.state["suggest_slot"] = slot  # at the start: a failing job must not retry every tick
+    now = ctx.now()
+    since = datetime.fromtimestamp(ctx.state["mail_since"]) if ctx.state["mail_since"] else now - timedelta(days=3)
+    seen = set(ctx.state["suggest_seen"])
+    open_tasks = [i for i in agenda.parse(agenda.read(ctx.cfg.agenda.todo)) if i.status == " "]
+
+    def job() -> None:
+        mails, evs, errors = _gather(ctx, since, now.date(), seen)
+        props = []
+        if mails or evs:
+            try:
+                text = ctx.suggest_model(suggest.prompt(mails, evs, open_tasks, now.date(), ctx.cfg.projects))
+                props = suggest.parse(text, mails, evs, now.date(), ctx.cfg.projects)
+            except Exception as e:  # the next slot tries again with the same e-mails
+                errors.append(f"model: {type(e).__name__}: {str(e)[:200]}")
+                mails, evs = [], []
+        with ctx.lock:
+            known = set(ctx.state["todo_decided"]) | {p["id"] for p in ctx.state["todo_props"]}
+            ctx.state["todo_props"] += [p | {"msg": None} for p in props if p["id"] not in known]
+            _remember(ctx, "suggest_seen", [f"mail:{m.msgid}" for m in mails] + [suggest.event_key(e) for e in evs], 3000)
+            if ctx.mail is not None and not any(e.startswith("mail") for e in errors):
+                ctx.state["mail_since"] = now.timestamp()
+            error = "; ".join(errors) or None
+            if error and error != ctx.state["suggest_error"]:
+                say(ctx, f"⚠️ Návrhy úkolů: {error}")
+            ctx.state["suggest_error"] = error
+            if ctx.state_path:
+                save_state(ctx.state_path, ctx.state)
+    ctx.spawn(job)
+
+
+def _notify_todo_props(ctx: Ctx) -> None:
+    for p in ctx.state["todo_props"]:
+        if p["msg"] is not None:
+            continue
+        text = f"📬 Návrh úkolu\n{p['line'].split(' [✉️')[0]}\n↳ {p['why']}\n{p['origin']}"
+        buttons = [[("✅ Přidat", f"sa:{p['id']}"), ("❌ Zahodit", f"sr:{p['id']}")]]
+        if p["mail_url"]:
+            buttons.append([("✉️ Otevřít mail", p["mail_url"])])
+        if (mid := say(ctx, text, buttons)) is None:
+            return  # Telegram down: retry next tick
+        p["msg"] = mid
+
+
+def decide_suggestion(ctx: Ctx, sid: str, accept: bool) -> str:
+    p = next((p for p in ctx.state["todo_props"] if p["id"] == sid), None)
+    if p is None:
+        return "už vyřízeno"
+    if accept:
+        path = _todo_path(ctx)
+        agenda.write(path, agenda.add(agenda.read(path), p["line"]))
+    ctx.state["todo_props"] = [x for x in ctx.state["todo_props"] if x["id"] != sid]
+    _remember(ctx, "todo_decided", [sid], 2000)
+    return "přidáno do úkolů" if accept else "zahozeno"
+
+
+def _maybe_remind(ctx: Ctx) -> None:
+    a, now = ctx.cfg.agenda, ctx.now()
+    if a is None:
+        return
+    today = now.date()
+    for key, at, day, label in (("today", a.remind_today_at, today, "dnes"),
+                                ("tomorrow", a.remind_tomorrow_at, today + timedelta(days=1), "zítra")):
+        if at is None or now.time() < at or ctx.state["reminded"].get(key) == today.isoformat():
+            continue
+        items = agenda.due_between(agenda.parse(agenda.read(a.todo)), day, day)
+        if items and say(ctx, f"⏰ Termín {label}:\n" + "\n".join(item_line(ctx, i) for i in items),
+                         _today_buttons(items)) is None:
+            return  # Telegram down: retry next tick
+        ctx.state["reminded"][key] = today.isoformat()
 
 
 def _dev(ctx: Ctx, arg: str) -> str:
@@ -876,6 +1001,8 @@ def _callback(ctx: Ctx, cb: dict) -> None:
             ctx.state["rejected_msgs"] = dict(list(rejected.items())[-50:])
     elif kind in ("la", "lr"):
         note = _decide_lesson(ctx, key, kind == "la")
+    elif kind in ("sa", "sr"):
+        note = decide_suggestion(ctx, key, kind == "sa")
     elif kind == "td":
         _quiet(ctx.bot.ack, cb["id"], todo_done(ctx, key))
         return  # the /dnes list keeps its other buttons
@@ -986,6 +1113,8 @@ def act(ctx: Ctx, action: str, data: dict) -> str:
             reply = f"📝 {item.title}"
         elif action == "todo_done":
             reply = todo_done(ctx, str(data.get("key")))
+        elif action in ("suggestion_accept", "suggestion_reject"):
+            reply = decide_suggestion(ctx, str(data.get("id")), action == "suggestion_accept")
         elif action == "dev":
             reply = _dev(ctx, "on" if data.get("on") else "off")
         else:
@@ -1019,6 +1148,10 @@ def tick(ctx: Ctx, updates: list[dict]) -> None:
         _notify_proposals(ctx)
         _maybe_merge_check(ctx)
         _notify_lessons(ctx)
+        if ctx.cfg.agenda:
+            _maybe_suggest(ctx)
+            _notify_todo_props(ctx)
+            _maybe_remind(ctx)
         _maybe_digest(ctx)
     finally:  # the offset too: a handled update must not be delivered again after a failure
         if ctx.state_path:

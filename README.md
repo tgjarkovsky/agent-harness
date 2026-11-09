@@ -49,6 +49,21 @@ Telegram: `/todo <text>` přidá úkol (`dnes`, `zítra`, `pozítří`, `po`–`
 
 Dashboard `/desktop` má vlevo sloupec Dnes: schůzky a bloky na časové ose (u bloku odkaz „+ kalendář“), dnešní úkoly s ✔ a formulář na nový úkol. U projektu je počet jeho úkolů (📝) a v detailu jejich seznam.
 
+### Návrhy úkolů z mailu a kalendáře
+
+V `agenda.suggest_at` (výchozí 07:00 a 14:00) harness vezme nové maily z Doručené pošty a nové události v kalendáři na 14 dní dopředu a model (Sonnet, bez nástrojů) z nich navrhne úkoly: odpovědi, které někdo čeká, termíny z mailů (faktury, formuláře, registrace) a přípravu na události. Návrh má termín `📅`, případně `⏳`, prioritu, projekt a odkazy: na mail v Gmailu a na odkazy z mailu, které k úkolu patří. Model smí vybrat jen odkazy, které v mailu opravdu jsou.
+
+Návrhy chodí do Telegramu s ✅ Přidat / ❌ Zahodit a tlačítkem na mail. V dashboardu jsou ve sloupci Dnes. Do `TODO.md` se zapíšou až po schválení. Každý mail a každá událost jde modelu jen jednou. Když od minula nic nepřibylo, model se nevolá.
+
+Gmail přes IMAP, jen čtení (maily nezůstanou označené jako přečtené):
+1. Účet Google → Zabezpečení → Dvoufázové ověření (musí být zapnuté) → Hesla aplikací. Vytvoř heslo, třeba „harness“.
+2. `setx HARNESS_GMAIL_USER "tvuj@gmail.com"` a `setx HARNESS_GMAIL_APP_PASSWORD "<heslo aplikace>"`.
+3. Restartuj serve.
+
+Bez hesla se návrhy dělají jen z kalendáře. Náhled bez zápisu a bez Telegramu: `.venv/Scripts/harness suggest [--days 3]`.
+
+Připomínky termínů (`📅`): v plánu dne sekce „⏰ Blíží se“ (`agenda.soon_days`, výchozí 3 dny), v `agenda.remind_today_at` (15:00) úkoly s termínem dnes a v `agenda.remind_tomorrow_at` (20:00) úkoly s termínem zítra. Připomínku vypne `null`.
+
 ### Přepínač Dev
 
 `/dev on|off` v Telegramu nebo 🛠 Dev v hlavičce dashboardu. Výchozí je vypnuto:
