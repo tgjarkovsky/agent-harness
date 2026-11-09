@@ -46,9 +46,8 @@ class Serve:
 
 @dataclass(frozen=True)
 class Agenda:
-    """Personal work: tasks in an Obsidian Tasks file, meetings and time blocks in Google Calendar."""
+    """Personal work: tasks in an Obsidian Tasks file; meetings from Google Calendar (HARNESS_GCAL_ICS)."""
     todo: Path
-    calendar: str = "primary"
     work_hours: tuple[time, time] = (time(9), time(18))
     block_minutes: int = 90
 
@@ -102,7 +101,7 @@ def _agenda(raw: dict, root: Path) -> Agenda:
     hours = (_time(start, "agenda.work_hours"), _time(end, "agenda.work_hours"))
     if hours[0] >= hours[1]:
         raise ValueError(f"agenda.work_hours must look like 09:00-18:00, got {raw.get('work_hours')!r}")
-    return Agenda((root / raw["todo"]).resolve(), raw.get("calendar", "primary"), hours, int(raw.get("block_minutes", 90)))
+    return Agenda((root / raw["todo"]).resolve(), hours, int(raw.get("block_minutes", 90)))
 
 
 def _serve(raw: dict) -> Serve:

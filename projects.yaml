@@ -12,8 +12,8 @@ plan_model: sonnet
 secondbrain: {path: ../secondbrain, days: 14}
 # harness serve: autorun kdykoli v limitech (serve.py), digest do Telegramu 1× denně v digest_at, sken TODO 1× denně
 serve: {digest_at: "07:00", question_timeout_hours: 24, scan: true}
-# osobní agenda: úkoly v Obsidian Tasks formátu, schůzky a bloky v Google Calendar (token: harness gcal-auth)
-agenda: {todo: ../secondbrain/TODO.md, calendar: primary, work_hours: "09:00-18:00", block_minutes: 90}
+# osobní agenda: úkoly v Obsidian Tasks formátu, schůzky z tajné iCal adresy Google Kalendáře v env HARNESS_GCAL_ICS
+agenda: {todo: ../secondbrain/TODO.md, work_hours: "09:00-18:00", block_minutes: 90}
 
 projects:
   guth-pictures:

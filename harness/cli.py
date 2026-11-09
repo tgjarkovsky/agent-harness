@@ -239,18 +239,8 @@ def cmd_serve(args) -> int:
 
 
 def _calendar(cfg):
-    """No token yet: harness runs without the calendar (`harness gcal-auth`, then restart serve)."""
-    return gcal.Calendar(cfg.agenda.calendar) if cfg.agenda and gcal.TOKEN.exists() else None
-
-
-def cmd_gcal_auth(args) -> int:
-    if not gcal.CLIENT.exists():
-        print(f"Chybí {gcal.CLIENT}: Google Cloud Console → Calendar API → OAuth client „Desktop app“ → stáhnout JSON.",
-              file=sys.stderr)
-        return 2
-    gcal.DIR.mkdir(exist_ok=True)
-    print(f"Token uložen: {gcal.authorize()}")
-    return 0
+    """No HARNESS_GCAL_ICS: harness runs without the calendar (set it, then restart serve)."""
+    return gcal.from_env() if cfg.agenda else None
 
 
 def cmd_today(args) -> int:
@@ -259,7 +249,7 @@ def cmd_today(args) -> int:
     if cfg.agenda is None:
         print("Chybí `agenda` v projects.yaml.", file=sys.stderr)
         return 2
-    ctx = SimpleNamespace(cfg=cfg, cal=_calendar(cfg), state={"blocks": None}, now=datetime.now)
+    ctx = SimpleNamespace(cfg=cfg, cal=_calendar(cfg), now=datetime.now)
     text, _ = serve.day_plan(ctx, datetime.now().date())
     print(text)
     return 0
@@ -356,7 +346,6 @@ def main(argv: list[str] | None = None) -> int:
     ls.add_argument("--project")
     ls.add_argument("--retire", metavar="PROJECT/ID")
     sub.add_parser("queue")
-    sub.add_parser("gcal-auth")
     sub.add_parser("today")
     sc = sub.add_parser("scan")
     sc.add_argument("--write", action="store_true")
@@ -365,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     handlers = {"simulate": cmd_simulate, "run": cmd_run, "dashboard": cmd_dashboard, "prune": cmd_prune,
                 "queue": cmd_queue, "scan": cmd_scan, "serve": cmd_serve, "go": cmd_go, "stats": cmd_stats,
-                "lessons": cmd_lessons, "gcal-auth": cmd_gcal_auth, "today": cmd_today}
+                "lessons": cmd_lessons, "today": cmd_today}
     return handlers[args.cmd](args)
 
 

@@ -1,19 +1,18 @@
-"""Google Calendar over REST: the day's events and writing time blocks.
+"""Google Calendar without OAuth: the day's events from the secret iCal address, blocks as prefilled links.
 
-OAuth client (Desktop app) from Google Cloud Console in ~/.harness/gcal_client.json, `harness gcal-auth` stores
-the token next to it. The google libraries are imported lazily: harness runs without them, just with no calendar."""
+The secret address (Google Calendar → Settings → the calendar → "Secret address in iCal format") lets anyone
+read the whole calendar, so it lives in the HARNESS_GCAL_ICS environment variable, never in the repo."""
+import os
 import time as _time
+import urllib.request
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
-from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import urlencode
 
-DIR = Path.home() / ".harness"
-CLIENT, TOKEN = DIR / "gcal_client.json", DIR / "gcal_token.json"
-SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
-API = "https://www.googleapis.com/calendar/v3/calendars"
+ENV = "HARNESS_GCAL_ICS"
 MIN_SLOT = timedelta(minutes=30)
 CACHE_SECONDS = 5 * 60
+ADD_URL = "https://calendar.google.com/calendar/render"
 
 
 @dataclass(frozen=True)
@@ -22,96 +21,67 @@ class Event:
     end: datetime
     title: str
     all_day: bool = False
+    free: bool = False  # "show as available": shown, but does not block a slot
 
 
-def authorize() -> Path:
-    from google_auth_oauthlib.flow import InstalledAppFlow
-    creds = InstalledAppFlow.from_client_secrets_file(str(CLIENT), SCOPES).run_local_server(port=0)
-    TOKEN.write_text(creds.to_json(), encoding="utf-8")
-    return TOKEN
+def _local(value) -> tuple[datetime, bool]:
+    if not isinstance(value, datetime):  # a date: all-day
+        return datetime.combine(value, time()), True
+    return (value.astimezone().replace(tzinfo=None) if value.tzinfo else value), False
 
 
-def _session():
-    from google.auth.transport.requests import AuthorizedSession, Request
-    from google.oauth2.credentials import Credentials
-    if not TOKEN.exists():
-        raise RuntimeError("chybí token Google Calendar, spusť `harness gcal-auth`")
-    creds = Credentials.from_authorized_user_file(str(TOKEN), SCOPES)
-    if not creds.valid:
-        creds.refresh(Request())
-        TOKEN.write_text(creds.to_json(), encoding="utf-8")
-    return AuthorizedSession(creds)
-
-
-def _local(raw: dict) -> tuple[datetime, bool]:
-    if "dateTime" in raw:
-        return datetime.fromisoformat(raw["dateTime"]).astimezone().replace(tzinfo=None), False
-    return datetime.combine(date.fromisoformat(raw["date"]), time()), True
-
-
-def _busy(item: dict) -> bool:
-    declined = any(a.get("self") and a.get("responseStatus") == "declined" for a in item.get("attendees", []))
-    return item.get("status") != "cancelled" and not declined
-
-
-def parse_events(items: list[dict]) -> list[Event]:
+def parse_ics(text: str | bytes, day: date) -> list[Event]:
+    """Events of one day, recurring ones expanded; cancelled ones dropped."""
+    import icalendar
+    import recurring_ical_events
+    # ponytail: declined invitations still show; telling them apart needs the owner's e-mail in the feed's ATTENDEE lines
     out = []
-    for it in items:
-        if not _busy(it):
+    for c in recurring_ical_events.of(icalendar.Calendar.from_ical(text)).at(day):
+        if str(c.get("STATUS", "")).upper() == "CANCELLED":
             continue
-        (start, all_day), (end, _) = _local(it["start"]), _local(it["end"])
-        out.append(Event(start, end, it.get("summary", "(bez názvu)"), all_day))
-    return out
-
-
-def _iso(dt: datetime) -> str:
-    return dt.astimezone().isoformat()
+        start, all_day = _local(c["DTSTART"].dt)
+        end = _local(c["DTEND"].dt)[0] if c.get("DTEND") else start + (c["DURATION"].dt if c.get("DURATION") else timedelta())
+        out.append(Event(start, end, str(c.get("SUMMARY", "(bez názvu)")), all_day,
+                         str(c.get("TRANSP", "")).upper() == "TRANSPARENT"))
+    return sorted(out, key=lambda e: (not e.all_day, e.start))
 
 
 class Calendar:
-    """One calendar of the owner; `session` is injectable for tests."""
+    """The owner's calendar over its secret iCal address; `fetch` is injectable for tests."""
 
-    def __init__(self, calendar_id: str = "primary", session=None):
-        self.url = f"{API}/{quote(calendar_id, safe='')}/events"
-        self._session = session
+    def __init__(self, url: str, fetch=None):
+        self._url = url
+        self._fetch = fetch or (lambda u: urllib.request.urlopen(u, timeout=20).read())
         self._cache: dict[date, tuple[float, list[Event]]] = {}  # the dashboard asks every minute, under serve's lock
-
-    def _s(self):
-        self._session = self._session or _session()
-        return self._session
 
     def events(self, day: date) -> list[Event]:
         hit = self._cache.get(day)
         if hit and _time.monotonic() - hit[0] < CACHE_SECONDS:
             return hit[1]
-        out = self._fetch(day)
+        out = parse_ics(self._fetch(self._url), day)
         self._cache[day] = (_time.monotonic(), out)
         return out
 
-    def _fetch(self, day: date) -> list[Event]:
-        start = datetime.combine(day, time())
-        r = self._s().get(self.url, params={"timeMin": _iso(start), "timeMax": _iso(start + timedelta(days=1)),
-                                            "singleEvents": "true", "orderBy": "startTime", "maxResults": 100})
-        r.raise_for_status()
-        return parse_events(r.json().get("items", []))
 
-    def insert(self, start: datetime, end: datetime, title: str, description: str = "") -> str:
-        self._cache.pop(start.date(), None)
-        r = self._s().post(self.url, json={"summary": title, "description": description,
-                                           "start": {"dateTime": _iso(start)}, "end": {"dateTime": _iso(end)},
-                                           "transparency": "opaque"})
-        r.raise_for_status()
-        return r.json().get("id", "")
+def from_env() -> Calendar | None:
+    url = os.environ.get(ENV, "").strip()
+    return Calendar(url) if url else None
+
+
+def add_link(start: datetime, end: datetime, title: str, details: str = "") -> str:
+    """Google Calendar's "new event" page, prefilled; local times without a zone use the calendar's own zone."""
+    dates = f"{start:%Y%m%dT%H%M%S}/{end:%Y%m%dT%H%M%S}"
+    return f"{ADD_URL}?" + urlencode({"action": "TEMPLATE", "text": title, "dates": dates, "details": details})
 
 
 def free_slots(events: list[Event], day: date, hours: tuple[time, time], now: datetime | None = None,
                min_len: timedelta = MIN_SLOT) -> list[tuple[datetime, datetime]]:
-    """Gaps of at least `min_len` in the working hours of `day` between timed events (all-day ones don't block)."""
+    """Gaps of at least `min_len` in the working hours of `day` between busy timed events."""
     start, end = datetime.combine(day, hours[0]), datetime.combine(day, hours[1])
     if now and now.date() == day:
         start = max(start, now.replace(second=0, microsecond=0))
     slots, cursor = [], start
-    for e in sorted((e for e in events if not e.all_day), key=lambda e: e.start):
+    for e in sorted((e for e in events if not e.all_day and not e.free), key=lambda e: e.start):
         if e.start >= end:
             break
         if e.start - cursor >= min_len:

@@ -35,6 +35,13 @@ def test_send_with_buttons_returns_message_id(fake):
         [{"text": "✅ Schválit", "callback_data": "ap:x-1"}, {"text": "❌", "callback_data": "rj:x-1"}]]}}
 
 
+def test_https_button_is_a_link(fake):
+    fake.result = {"message_id": 1}
+    Telegram("T", 1).send("x", [[("📅 Blok", "https://calendar.google.com/x"), ("✔", "td:k")]])
+    assert fake.requests[0][1]["reply_markup"]["inline_keyboard"] == [
+        [{"text": "📅 Blok", "url": "https://calendar.google.com/x"}, {"text": "✔", "callback_data": "td:k"}]]
+
+
 def test_long_text_is_truncated(fake):
     fake.result = {"message_id": 1}
     Telegram("T", 1).send("x" * 5000)

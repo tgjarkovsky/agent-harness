@@ -8,7 +8,11 @@ from dataclasses import dataclass
 
 MAX_TEXT = 4096
 
-Buttons = list[list[tuple[str, str]]]  # rows of (label, callback_data)
+Buttons = list[list[tuple[str, str]]]  # rows of (label, callback_data or an https:// link)
+
+
+def _button(text: str, data: str) -> dict:
+    return {"text": text, "url": data} if data.startswith("https://") else {"text": text, "callback_data": data}
 
 
 class TelegramError(Exception):
@@ -43,8 +47,7 @@ class Telegram:
     def send(self, text: str, buttons: Buttons | None = None) -> int:
         payload: dict = {"chat_id": self.chat_id, "text": text[:MAX_TEXT]}
         if buttons:
-            payload["reply_markup"] = {"inline_keyboard": [[{"text": t, "callback_data": d} for t, d in row]
-                                                           for row in buttons]}
+            payload["reply_markup"] = {"inline_keyboard": [[_button(t, d) for t, d in row] for row in buttons]}
         return self._call("sendMessage", payload)["message_id"]
 
     def edit(self, message_id: int, text: str) -> None:

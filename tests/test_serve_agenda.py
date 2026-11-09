@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pytest
 
-from harness import gcal
+from harness import gcal, serve
 from harness.projects import Agenda
 
 from .test_serve import Env
@@ -67,16 +67,12 @@ def test_dev_off_keeps_proposals_out_of_chat_and_on_does_not_flood(tmp_path):
 
 class FakeCal:
     def __init__(self, events=(), fail=False):
-        self.events_, self.fail, self.inserted = list(events), fail, []
+        self.events_, self.fail = list(events), fail
 
     def events(self, day):
         if self.fail:
             raise OSError("offline")
         return self.events_
-
-    def insert(self, start, end, title, description=""):
-        self.inserted.append((start, end, title, description))
-        return "id"
 
 
 def morning_env(tmp_path, cal, dev=False):
@@ -94,22 +90,26 @@ def test_morning_plan_with_meetings_tasks_blocks_and_dev_line(tmp_path):
     plan = env.bot.sent[-1]
     assert plan["text"].splitlines()[:9] == [
         "☀️ Plán dne 9. 11.", "", "📅 Schůzky", "09:00–10:00 Standup", "", "✅ Úkoly", "• Zavolat klientovi [demo]",
-        "", "🎯 Návrh bloků"]
+        "", "🎯 Návrh bloků (tlačítko otevře Google Kalendář, ulož)"]
     assert "10:00–11:30 Zavolat klientovi" in plan["text"] and "🛠 Dev:" in plan["text"]
     assert len(env.bot.sent) == 1  # dev off: no separate digest
-    assert plan["buttons"][0][0][1] == "gb:2026-11-09"
-    env.tick(env.press("gb:2026-11-09", plan))
-    assert cal.inserted == [(datetime(2026, 11, 9, 10), datetime(2026, 11, 9, 11, 30), "🎯 Zavolat klientovi", "#demo")]
-    env.tick(env.press("gb:2026-11-09", plan))
-    assert env.bot.acks[-1][1] == "bloky už jsou zapsané" and len(cal.inserted) == 1
+    label, link = plan["buttons"][0][0]
+    assert label == "📅 10:00 Zavolat klientovi"
+    assert link == gcal.add_link(datetime(2026, 11, 9, 10), datetime(2026, 11, 9, 11, 30), "🎯 Zavolat klientovi", "#demo")
     env.tick()
     assert len(env.bot.sent) == 1  # once a day
 
 
-def test_dashboard_actions_add_done_dev_and_blocks(tmp_path):
-    from harness import serve
+def test_saved_block_is_not_proposed_again(tmp_path):
+    saved = gcal.Event(datetime(2026, 11, 9, 10), datetime(2026, 11, 9, 11, 30), "🎯 Zavolat klientovi")
+    env = morning_env(tmp_path, FakeCal([saved]))
+    data = serve.agenda_data(env.ctx, MONDAY.date())
+    assert data["blocks"] == [] and [t["title"] for t in data["tasks"]] == ["Zavolat klientovi"]
+
+
+def test_dashboard_actions_add_done_dev_and_block_links(tmp_path):
     env, todo = env_with_todo(tmp_path)
-    env.ctx.cal = cal = FakeCal()
+    env.ctx.cal = FakeCal()
     assert serve.act(env.ctx, "todo_add", {"text": "Poslat fotky zítra", "project": "demo"}) == "📝 Poslat fotky"
     assert todo.read_bytes().decode().endswith("- [ ] Poslat fotky #demo 📅 2026-11-10\n")
     with pytest.raises(ValueError):
@@ -117,9 +117,11 @@ def test_dashboard_actions_add_done_dev_and_blocks(tmp_path):
     serve.act(env.ctx, "todo_add", {"text": "Dnes hotovo dnes"})
     data = serve.agenda_data(env.ctx, MONDAY.date())
     assert [t["title"] for t in data["tasks"]] == ["Dnes hotovo"]
-    assert [(b["start"], b["end"]) for b in data["blocks"]] == [("2026-11-09T12:00", "2026-11-09T13:30")]
-    assert serve.act(env.ctx, "blocks", {"day": "2026-11-09"}) == "📅 zapsáno 1 bloků" and len(cal.inserted) == 1
-    assert serve.agenda_data(env.ctx, MONDAY.date())["written"] is True
+    [block] = data["blocks"]
+    assert (block["start"], block["end"]) == ("2026-11-09T12:00", "2026-11-09T13:30")
+    assert block["link"].startswith("https://calendar.google.com/calendar/render?action=TEMPLATE")
+    with pytest.raises(KeyError):
+        serve.act(env.ctx, "blocks", {"day": "2026-11-09"})  # no writing to the calendar any more
     assert serve.act(env.ctx, "todo_done", {"key": data["tasks"][0]["key"]}) == "✔ Dnes hotovo"
     assert serve.act(env.ctx, "dev", {"on": False}).endswith("vypnuté (návrhy a lekce jen v dashboardu)")
     assert serve.snapshot(env.ctx)["dev"] is False

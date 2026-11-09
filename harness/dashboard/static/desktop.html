@@ -143,6 +143,7 @@
   .tl li { display:flex; gap:10px; align-items:baseline; font-size:15px; padding:4px 8px; border-left:3px solid var(--line); border-radius:4px; }
   .tl li.block { border-left-color:var(--accent); background:rgba(140,152,255,.08); }
   .tl li.past { opacity:.5; }
+  .tl .add { margin-left:auto; font-size:13px; white-space:nowrap; }
   .tl .hm { font-variant-numeric:tabular-nums; color:var(--muted); font-size:13px; white-space:nowrap; min-width:88px; }
   .todo li { display:flex; gap:8px; align-items:center; font-size:15px; min-width:0; }
   .todo li .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -194,8 +195,7 @@
 
   <div class="cols">
     <div class="col">
-      <section><h2>Dnes <span class="count" id="todayDate"></span><span class="spacer"></span>
-        <button class="small primary" data-a="blocks" id="writeBlocks" hidden title="Zapíše navržené bloky do Google Calendar">📅 Zapsat bloky</button></h2>
+      <section><h2>Dnes <span class="count" id="todayDate"></span></h2>
         <div id="agendaNote" class="muted" hidden></div>
         <ul class="tl" id="timeline"></ul></section>
       <section><h2>Úkoly <span class="count" id="todoCount"></span></h2>
@@ -704,9 +704,9 @@ function renderAgenda(a) {
     .sort((x, y) => (x.all_day ? "" : x.start).localeCompare(y.all_day ? "" : y.start));
   $("timeline").innerHTML = rows.length ? rows.map(r => `<li class="${r.kind === "block" ? "block" : ""} ${!r.all_day && r.end < now ? "past" : ""}">
       <span class="hm">${r.all_day ? "celý den" : `${hm(r.start)}–${hm(r.end)}`}</span>
-      <span class="sens">${r.kind === "block" ? "🎯 " : ""}${esc(r.title)}</span>${r.project ? chip(r.project) : ""}</li>`).join("")
+      <span class="sens">${r.kind === "block" ? "🎯 " : ""}${esc(r.title)}</span>${r.project ? chip(r.project) : ""}
+      ${r.kind === "block" ? `<a class="add" href="${esc(r.link)}" target="_blank" rel="noopener" title="Otevře Google Kalendář s předvyplněným blokem, stačí uložit">+ kalendář</a>` : ""}</li>`).join("")
     : `<li class="muted">Žádné schůzky.</li>`;
-  $("writeBlocks").hidden = !a.blocks.length || a.written || !serveOn;
   $("todoCount").textContent = a.tasks.length;
   $("todos").innerHTML = a.tasks.length ? a.tasks.map(todoLi).join("") : `<li class="muted">Na dnes nic.</li>`;
 }
@@ -875,7 +875,6 @@ document.addEventListener("click", e => {
     case "planCC": planSession(d.project); break;
     case "dev": act("dev", {on: !devOn}); break;
     case "todoDone": b.disabled = true; agendaAct("todo_done", {key: d.key}); break;
-    case "blocks": if (A) { b.disabled = true; agendaAct("blocks", {day: A.day}).finally(() => { b.disabled = false; }); } break;
   }
 });
 

@@ -157,7 +157,7 @@ def create_app(home: Path, control: serve.Ctx | None = None, prs=traces.open_prs
             with control.lock:
                 return serve.agenda_data(control, control.now().date())
         cfg = load_config(home / "projects.yaml")
-        ctx = SimpleNamespace(cfg=cfg, cal=None, state={"blocks": None}, now=datetime.now)
+        ctx = SimpleNamespace(cfg=cfg, cal=None, now=datetime.now)
         return serve.agenda_data(ctx, datetime.now().date())
 
     @app.post("/control/{action}", dependencies=[Depends(require_local_origin)])

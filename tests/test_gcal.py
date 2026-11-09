@@ -1,4 +1,5 @@
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
+from urllib.parse import parse_qs, urlparse
 
 from harness import agenda, gcal
 
@@ -24,43 +25,79 @@ def test_free_slots_starts_now_and_ignores_events_after_hours():
     assert gcal.free_slots([ev(8, 19)], DAY, HOURS) == []
 
 
-def test_parse_events_skips_cancelled_and_declined():
-    items = [
-        {"summary": "Porada", "start": {"dateTime": "2026-11-09T10:00:00+01:00"}, "end": {"dateTime": "2026-11-09T11:00:00+01:00"}},
-        {"summary": "Zrušeno", "status": "cancelled", "start": {"date": "2026-11-09"}, "end": {"date": "2026-11-10"}},
-        {"summary": "Odmítnuto", "attendees": [{"self": True, "responseStatus": "declined"}],
-         "start": {"date": "2026-11-09"}, "end": {"date": "2026-11-10"}},
-        {"start": {"date": "2026-11-09"}, "end": {"date": "2026-11-10"}},
+ICS = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//test//EN
+BEGIN:VEVENT
+UID:standup
+DTSTART:20261005T100000
+DTEND:20261005T103000
+RRULE:FREQ=WEEKLY
+SUMMARY:Standup
+END:VEVENT
+BEGIN:VEVENT
+UID:allday
+DTSTART;VALUE=DATE:20261109
+DTEND;VALUE=DATE:20261110
+END:VEVENT
+BEGIN:VEVENT
+UID:utc
+DTSTART:20261109T130000Z
+DURATION:PT1H
+SUMMARY:Klient
+END:VEVENT
+BEGIN:VEVENT
+UID:cancelled
+DTSTART:20261109T140000
+DTEND:20261109T150000
+STATUS:CANCELLED
+SUMMARY:Zrušeno
+END:VEVENT
+BEGIN:VEVENT
+UID:free
+DTSTART:20261109T160000
+DTEND:20261109T170000
+TRANSP:TRANSPARENT
+SUMMARY:Volno
+END:VEVENT
+BEGIN:VEVENT
+UID:other-day
+DTSTART:20261110T090000
+DTEND:20261110T100000
+SUMMARY:Zítra
+END:VEVENT
+END:VCALENDAR
+"""
+
+
+def test_parse_ics_expands_recurring_converts_utc_and_drops_cancelled():
+    utc = datetime(2026, 11, 9, 13, tzinfo=timezone.utc).astimezone().replace(tzinfo=None)
+    assert gcal.parse_ics(ICS, DAY) == [
+        gcal.Event(at(0), datetime(2026, 11, 10), "(bez názvu)", True),
+        gcal.Event(at(10), at(10, 30), "Standup"),
+        gcal.Event(utc, utc + timedelta(hours=1), "Klient"),
+        gcal.Event(at(16), at(17), "Volno", free=True),
     ]
-    porada, allday = gcal.parse_events(items)
-    assert porada.title == "Porada" and porada.end - porada.start == timedelta(hours=1) and not porada.all_day
-    assert allday == gcal.Event(at(0), datetime(2026, 11, 10), "(bez názvu)", True)
 
 
-class FakeSession:
-    def __init__(self):
-        self.calls = []
-
-    def _r(self, body):
-        return type("R", (), {"raise_for_status": lambda s: None, "json": lambda s: body})()
-
-    def get(self, url, params):
-        self.calls.append(("get", url, params))
-        return self._r({"items": [{"summary": "A", "start": {"date": "2026-11-09"}, "end": {"date": "2026-11-10"}}]})
-
-    def post(self, url, json):
-        self.calls.append(("post", url, json))
-        return self._r({"id": "e1"})
+def test_free_event_does_not_block_a_slot():
+    assert gcal.free_slots([gcal.Event(at(9), at(18), "Volno", free=True)], DAY, HOURS) == [(at(9), at(18))]
 
 
-def test_calendar_rest_calls():
-    s = FakeSession()
-    cal = gcal.Calendar("me@x.cz", session=s)
-    assert [e.title for e in cal.events(DAY)] == ["A"]
-    assert cal.insert(at(10), at(11), "🎯 T", "#kytky") == "e1"
-    (_, url, params), (_, _, body) = s.calls
-    assert url.endswith("/calendars/me%40x.cz/events") and params["singleEvents"] == "true"
-    assert body["summary"] == "🎯 T" and body["start"]["dateTime"].startswith("2026-11-09T10:00:00")
+def test_calendar_fetches_once_per_cache_window():
+    calls = []
+    cal = gcal.Calendar("https://secret", fetch=lambda u: calls.append(u) or ICS.encode())
+    assert [e.title for e in cal.events(DAY)][1] == "Standup"
+    cal.events(DAY)
+    assert calls == ["https://secret"]
+
+
+def test_add_link_prefills_google_calendar():
+    link = gcal.add_link(at(10), at(11, 30), "🎯 Zavolat", "#kytky")
+    q = parse_qs(urlparse(link).query)
+    assert link.startswith("https://calendar.google.com/calendar/render?")
+    assert q == {"action": ["TEMPLATE"], "text": ["🎯 Zavolat"], "dates": ["20261109T100000/20261109T113000"],
+                 "details": ["#kytky"]}
 
 
 def test_plan_blocks_greedy_fill():

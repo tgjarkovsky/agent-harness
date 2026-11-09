@@ -9,7 +9,7 @@ dependencies = [
   "fastapi>=0.142",
   "uvicorn>=0.54",
   "pyyaml>=6",
-  "google-auth-oauthlib>=1.2",  # Google Calendar (agenda), imported lazily
+  "recurring-ical-events>=3",  # Google Calendar iCal feed with recurring events (agenda)
 ]
 
 [project.optional-dependencies]
