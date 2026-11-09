@@ -40,7 +40,7 @@ HELP = ("Příkazy:\n/todo <text> — osobní úkol (#projekt, dnes/zítra/pá/2
 def default_state(now: datetime) -> dict:
     return {"paused": False, "paused_projects": [], "run": None, "seq": 0, "offset": 0, "asked": {}, "answers": {}, "approval": None,
             "proposals_sent": [], "lessons_sent": [], "rejected_msgs": {}, "auto_tried": {}, "next_check": 0,
-            "last_scan": None, "dev": False, "blocks": None,
+            "last_scan": None, "dev": False,
             "merge_checked": {}, "merges": [], "merge_ignored": [], "last_digest": now.date().isoformat(), "digest_since": now.timestamp()}
 
 
@@ -137,7 +137,7 @@ class Ctx:
     sh: Callable[[str, Path], tuple[bool, str]] = lambda cmd, cwd: (False, "no shell")  # nodes.real.sh in the real serve
     merge: Callable[[str, list], str] = lambda name, proposals: "[]"  # nodes.real.real_merge in the real serve
     facts: dict = field(default_factory=dict)  # project → Facts of the last autorun check, for /status
-    cal: object = None  # gcal.Calendar-like: events(day), insert(start, end, title, description); None = no calendar
+    cal: object = None  # gcal.Calendar-like: events(day); None = no calendar
 
 
 def say(ctx: Ctx, text: str, buttons: Buttons | None = None) -> int | None:
@@ -722,9 +722,14 @@ def _today_msg(ctx: Ctx) -> str:
     return ""
 
 
+BLOCK_SIGN = "🎯 "
+
+
 def _block_json(b: agenda.Block, projects) -> dict:
+    project = b.item.project(projects)
     return {"start": b.start.isoformat(timespec="minutes"), "end": b.end.isoformat(timespec="minutes"),
-            "title": b.item.title, "project": b.item.project(projects), "key": b.item.key}
+            "title": b.item.title, "project": project, "key": b.item.key,
+            "link": gcal.add_link(b.start, b.end, BLOCK_SIGN + b.item.title, f"#{project}" if project else "")}
 
 
 def agenda_data(ctx: Ctx, day) -> dict:
@@ -737,23 +742,20 @@ def agenda_data(ctx: Ctx, day) -> dict:
            "tasks": [{"title": i.title, "key": i.key, "project": i.project(ctx.cfg.projects),
                       "late": bool(i.when and i.when < day), "line": i.line.strip()} for i in tasks]}
     if ctx.cal is None:
-        out["error"] = "kalendář není připojený (harness gcal-auth)"
+        out["error"] = f"kalendář není připojený (proměnná {gcal.ENV}, pak restart serve)"
         return out
     try:
         evs = ctx.cal.events(day)
-    except Exception as e:  # network, expired token: the tasks still show
+    except Exception as e:  # network, a revoked address: the tasks still show
         out["error"] = f"kalendář: {type(e).__name__}: {str(e)[:200]}"
         return out
     out["events"] = [{"start": e.start.isoformat(timespec="minutes"), "end": e.end.isoformat(timespec="minutes"),
                       "title": e.title, "all_day": e.all_day} for e in evs]
-    stored = ctx.state["blocks"]
-    if stored and stored["day"] == day.isoformat() and stored["written"]:
-        out["blocks"], out["written"] = stored["items"], True
-        return out
+    planned = {e.title.removeprefix(BLOCK_SIGN) for e in evs if e.title.startswith(BLOCK_SIGN)}  # saved blocks
     slots = gcal.free_slots(evs, day, a.work_hours, ctx.now())
-    blocks = agenda.plan_blocks(tasks, slots, timedelta(minutes=a.block_minutes))
-    out["blocks"], out["written"] = [_block_json(b, ctx.cfg.projects) for b in blocks], False
-    ctx.state["blocks"] = {"day": day.isoformat(), "items": out["blocks"], "written": False}
+    todo = [i for i in tasks if i.title not in planned]
+    out["blocks"] = [_block_json(b, ctx.cfg.projects)
+                     for b in agenda.plan_blocks(todo, slots, timedelta(minutes=a.block_minutes))]
     return out
 
 
@@ -773,33 +775,12 @@ def day_plan(ctx: Ctx, day) -> tuple[str, Buttons | None]:
     tasks = [f"• {t['title']}" + (f" [{t['project']}]" if t["project"] else "") + (" ⚠️ po termínu" if t["late"] else "")
              for t in d["tasks"]]
     lines += ["", "✅ Úkoly", *(tasks or ["nic na dnes"])]
-    blocks = [f"{_hm(b['start'])}–{_hm(b['end'])} {b['title']}" for b in d["blocks"]]
-    if blocks:
-        lines += ["", "🎯 Návrh bloků", *blocks]
-    buttons = ([[("📅 Zapsat bloky", f"gb:{d['day']}")]] if blocks and not d.get("written") else []) \
+    if d["blocks"]:
+        lines += ["", "🎯 Návrh bloků (tlačítko otevře Google Kalendář, ulož)",
+                  *(f"{_hm(b['start'])}–{_hm(b['end'])} {b['title']}" for b in d["blocks"])]
+    buttons = [[(f"📅 {_hm(b['start'])} {b['title'][:36]}", b["link"])] for b in d["blocks"]] \
         + [[(f"✔ {t['title'][:40]}", f"td:{t['key']}")] for t in d["tasks"][:8]]
     return "\n".join(lines), buttons or None
-
-
-def blocks_write(ctx: Ctx, day: str) -> str:
-    stored = ctx.state["blocks"]
-    if not stored or stored["day"] != day:
-        return "žádný návrh bloků pro tento den"
-    if stored["written"]:
-        return "bloky už jsou zapsané"
-    if ctx.cal is None:
-        return "kalendář není připojený"
-    written = 0
-    for b in stored["items"]:
-        try:
-            ctx.cal.insert(datetime.fromisoformat(b["start"]), datetime.fromisoformat(b["end"]), f"🎯 {b['title']}",
-                           f"#{b['project']}" if b["project"] else "")
-        except Exception as e:
-            stored["items"] = stored["items"][written:]  # a retry writes only the rest
-            return f"zapsáno {written}, pak chyba: {type(e).__name__}: {str(e)[:200]}"
-        written += 1
-    stored["written"] = True
-    return f"📅 zapsáno {written} bloků"
 
 
 def _dev(ctx: Ctx, arg: str) -> str:
@@ -895,9 +876,6 @@ def _callback(ctx: Ctx, cb: dict) -> None:
             ctx.state["rejected_msgs"] = dict(list(rejected.items())[-50:])
     elif kind in ("la", "lr"):
         note = _decide_lesson(ctx, key, kind == "la")
-    elif kind == "gb":
-        _quiet(ctx.bot.ack, cb["id"], blocks_write(ctx, key))
-        return
     elif kind == "td":
         _quiet(ctx.bot.ack, cb["id"], todo_done(ctx, key))
         return  # the /dnes list keeps its other buttons
@@ -1008,8 +986,6 @@ def act(ctx: Ctx, action: str, data: dict) -> str:
             reply = f"📝 {item.title}"
         elif action == "todo_done":
             reply = todo_done(ctx, str(data.get("key")))
-        elif action == "blocks":
-            reply = blocks_write(ctx, str(data.get("day")))
         elif action == "dev":
             reply = _dev(ctx, "on" if data.get("on") else "off")
         else:

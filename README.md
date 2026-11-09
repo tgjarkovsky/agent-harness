@@ -33,21 +33,21 @@ Harness čte stav, text, `#tagy`, `📅` termín, `⏳` naplánováno, prioritu 
 Nastavení v `projects.yaml`:
 
 ```yaml
-agenda: {todo: ../secondbrain/TODO.md, calendar: primary, work_hours: "09:00-18:00", block_minutes: 90}
+agenda: {todo: ../secondbrain/TODO.md, work_hours: "09:00-18:00", block_minutes: 90}
 ```
 
-Google Calendar:
-1. V Google Cloud Console založ projekt, zapni Google Calendar API a vytvoř OAuth client typu „Desktop app“. JSON ulož jako `~/.harness/gcal_client.json`.
-2. `.venv/Scripts/harness gcal-auth` otevře prohlížeč a uloží token do `~/.harness/gcal_token.json`.
+Google Kalendář (jen čtení, bez Google Cloudu):
+1. V Google Kalendáři otevři Nastavení → svůj kalendář → „Tajná adresa ve formátu iCal“ a adresu zkopíruj.
+2. Ulož ji do proměnné prostředí: `setx HARNESS_GCAL_ICS "<adresa>"`. Do `projects.yaml` ji nedávej: kdo ji má, vidí celý kalendář. Když unikne, v Google Kalendáři ji resetuj.
 3. Restartuj serve.
 
 `.venv/Scripts/harness today` vypíše plán dne v terminálu (ověření bez Telegramu).
 
-Ráno v `serve.digest_at` přijde místo digestu plán dne: schůzky, úkoly a návrh bloků do volných oken pracovní doby (úkoly po řadě, každý nejvýš `block_minutes`). Tlačítko „📅 Zapsat bloky“ je zapíše do kalendáře jako `🎯 <úkol>`. Bez tokenu přijde plán bez schůzek a bloků.
+Ráno v `serve.digest_at` přijde místo digestu plán dne: schůzky, úkoly a návrh bloků do volných oken pracovní doby (úkoly po řadě, každý nejvýš `block_minutes`). Každý blok má tlačítko, které otevře Google Kalendář s předvyplněnou událostí `🎯 <úkol>`, stačí ji uložit. Úkol, který už v kalendáři blok má, se znovu nenavrhuje. Bez `HARNESS_GCAL_ICS` přijde plán bez schůzek a bloků.
 
 Telegram: `/todo <text>` přidá úkol (`dnes`, `zítra`, `pozítří`, `po`–`ne` nebo `2026-11-12` se změní na `📅`), `/dnes` vypíše dnešní úkoly s tlačítky ✔, `/plan` pošle plán dne hned.
 
-Dashboard `/desktop` má vlevo sloupec Dnes: schůzky a bloky na časové ose, dnešní úkoly s ✔ a formulář na nový úkol. U projektu je počet jeho úkolů (📝) a v detailu jejich seznam.
+Dashboard `/desktop` má vlevo sloupec Dnes: schůzky a bloky na časové ose (u bloku odkaz „+ kalendář“), dnešní úkoly s ✔ a formulář na nový úkol. U projektu je počet jeho úkolů (📝) a v detailu jejich seznam.
 
 ### Přepínač Dev
 

@@ -108,3 +108,4 @@
 ## [2026-10-30] - Dashboard /desktop: layout inbox + projekty, odstraněn skin Mlékárna
 ## [2026-10-30] - Dashboard /desktop: Inbox ve více sloupcích, návrhy rozdělené podle typu, jedna pravá lišta
 ## [2026-11-09] - Osobní agenda: úkoly v secondbrain/TODO.md (Obsidian Tasks), Google Calendar, ranní plán dne s bloky na 1 klik, /todo /dnes /plan /dev, dashboard se sloupcem Dnes a přepínačem Dev
+## [2026-11-09] - Google Kalendář přes tajnou iCal adresu (HARNESS_GCAL_ICS) místo OAuth, bloky jako předvyplněné odkazy do kalendáře
