@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
-from . import backlog, events, lessons, traces
+from . import agenda, backlog, events, gcal, lessons, traces
 from .discover import LENSES, apply_merge, parse_merges, safe_title, task_lines
 from .priority import rank, rank_by_config
 from .projects import Config, Idle
@@ -30,7 +30,8 @@ CLEANUP_DAYS, CLEANUP_PRS = 14, 10  # cleanup review when the last one is older 
 CHECK_EVERY = 5 * 60  # gh is asked about PRs at most this often
 AUTORUN_QUOTA_CAP = 0.85  # no automatic start while the 5h or weekly window is at or above this
 TASK_USAGE = "/task <projekt> <titulek> — přidat úkol (další řádky = popis)"
-HELP = ("Příkazy:\n/status — stav démona\n/queue — fronta úkolů\n/proposals — znovu poslat návrhy ke schválení\n"
+HELP = ("Příkazy:\n/todo <text> — osobní úkol (#projekt, dnes/zítra/pá/2026-11-12)\n/dnes — dnešní úkoly\n/plan — plán dne se schůzkami a návrhem bloků\n"
+        "/dev on|off — vývojové notifikace (návrhy, lekce)\n/status — stav démona\n/queue — fronta úkolů\n/proposals — znovu poslat návrhy ke schválení\n"
         "/run — spustit běh hned\n/pause, /resume [projekt] — vypnout/zapnout autorun (celý nebo jen projekt)\n/digest — přehled teď\n"
         f"{TASK_USAGE}\n\n"
         "Na dotaz k nejasnému úkolu odpověz reply na jeho zprávu.")
@@ -39,7 +40,7 @@ HELP = ("Příkazy:\n/status — stav démona\n/queue — fronta úkolů\n/propo
 def default_state(now: datetime) -> dict:
     return {"paused": False, "paused_projects": [], "run": None, "seq": 0, "offset": 0, "asked": {}, "answers": {}, "approval": None,
             "proposals_sent": [], "lessons_sent": [], "rejected_msgs": {}, "auto_tried": {}, "next_check": 0,
-            "last_scan": None,
+            "last_scan": None, "dev": False, "blocks": None,
             "merge_checked": {}, "merges": [], "merge_ignored": [], "last_digest": now.date().isoformat(), "digest_since": now.timestamp()}
 
 
@@ -136,6 +137,7 @@ class Ctx:
     sh: Callable[[str, Path], tuple[bool, str]] = lambda cmd, cwd: (False, "no shell")  # nodes.real.sh in the real serve
     merge: Callable[[str, list], str] = lambda name, proposals: "[]"  # nodes.real.real_merge in the real serve
     facts: dict = field(default_factory=dict)  # project → Facts of the last autorun check, for /status
+    cal: object = None  # gcal.Calendar-like: events(day), insert(start, end, title, description); None = no calendar
 
 
 def say(ctx: Ctx, text: str, buttons: Buttons | None = None) -> int | None:
@@ -380,6 +382,9 @@ def _notify_proposals(ctx: Ctx) -> None:
     for t in _tasks(ctx):
         if t.status != "~" or t.id in sent:
             continue
+        if not ctx.state["dev"]:  # dev off: it waits in the dashboard, /dev on must not flood the chat
+            sent.append(t.id)
+            continue
         text = f"💡 Návrh [{t.project}] P{t.priority} {t.id}\n{t.title}" + (f"\n\n{t.description}" if t.description else "")
         if say(ctx, text, [[("✅ Schválit", f"ap:{t.id}"), ("❌ Zamítnout", f"rj:{t.id}")]]) is None:
             return  # Telegram down: retry next tick
@@ -538,6 +543,9 @@ def _notify_lessons(ctx: Ctx) -> None:
         ref = f"{x['project']}/{x['id']}"
         if ref in sent:
             continue
+        if not ctx.state["dev"]:
+            sent.append(ref)
+            continue
         if say(ctx, f"🧠 Lekce [{x['project']}]\n{x['text']}",
                [[("✅ Platí", f"la:{ref}"), ("❌ Zahodit", f"lr:{ref}")]]) is None:
             return
@@ -611,10 +619,32 @@ def _send_digest(ctx: Ctx) -> None:
         ctx.state["last_digest"], ctx.state["digest_since"] = now.date().isoformat(), now.timestamp()
 
 
+def _dev_line(ctx: Ctx) -> str:
+    tally = _digest_tally(events.since(ctx.conn, ctx.state["digest_since"], ctx.simulated))
+    tasks = _tasks(ctx)
+    failed = sum(1 for t in tally["tasks"].values() if t.get("outcome") not in (None, "pr_opened"))
+    return (f"🛠 Dev: PR {sum(t.get('outcome') == 'pr_opened' for t in tally['tasks'].values())}"
+            + (f", selhalo {failed}" if failed else "")
+            + f", fronta {sum(t.status == ' ' for t in tasks)}, návrhy {sum(t.status == '~' for t in tasks)} → dashboard")
+
+
+def _send_morning(ctx: Ctx) -> None:
+    now = ctx.now()
+    text, buttons = day_plan(ctx, now.date())
+    if not ctx.state["dev"]:
+        text += "\n\n" + _dev_line(ctx)
+    if say(ctx, text, buttons) is None:
+        return
+    if ctx.state["dev"]:
+        _send_digest(ctx)
+    else:
+        ctx.state["last_digest"], ctx.state["digest_since"] = now.date().isoformat(), now.timestamp()
+
+
 def _maybe_digest(ctx: Ctx) -> None:
     now = ctx.now()
     if ctx.state["last_digest"] != now.date().isoformat() and now.time() >= ctx.cfg.serve.digest_at:
-        _send_digest(ctx)
+        _send_morning(ctx) if ctx.cfg.agenda else _send_digest(ctx)
 
 
 def history(conn, day: str, backlog_text: str, simulated: bool = False) -> str:
@@ -631,6 +661,151 @@ def _maybe_scan(ctx: Ctx) -> None:
             ctx.scan()
         except Exception as e:
             print(f"scan failed: {e}", file=sys.stderr)
+
+
+# --- agenda (personal tasks) ------------------------------------------------------------------------------
+
+def _todo_path(ctx: Ctx) -> Path:
+    if ctx.cfg.agenda is None:
+        raise ValueError("chybí `agenda.todo` v projects.yaml")
+    return ctx.cfg.agenda.todo
+
+
+def todo_add(ctx: Ctx, text: str) -> agenda.Item:
+    body = agenda.capture(text, ctx.now().date())
+    if not body:
+        raise ValueError("prázdný úkol")
+    path = _todo_path(ctx)
+    agenda.write(path, agenda.add(agenda.read(path), body))
+    return agenda.parse_line(0, f"- [ ] {body}")
+
+
+def todo_done(ctx: Ctx, key: str) -> str:
+    path = _todo_path(ctx)
+    text, item = agenda.complete(agenda.read(path), key, ctx.now().date())
+    if item is None:
+        return "úkol už není otevřený"
+    agenda.write(path, text)
+    return f"✔ {item.title}"
+
+
+def todo_today(ctx: Ctx) -> list[agenda.Item]:
+    return agenda.today_items(agenda.parse(agenda.read(_todo_path(ctx))), ctx.now().date())
+
+
+def item_line(ctx: Ctx, i: agenda.Item) -> str:
+    late = " ⚠️ po termínu" if i.when and i.when < ctx.now().date() else ""
+    return f"• {i.title}" + (f" [{p}]" if (p := i.project(ctx.cfg.projects)) else "") + late
+
+
+def _todo_msg(ctx: Ctx, text: str) -> str:
+    try:
+        item = todo_add(ctx, text)
+    except ValueError as e:
+        return f"❌ {e}\nPoužití: /todo <text> [#projekt] [dnes|zítra|pá|2026-11-12]"
+    say(ctx, f"📝 {item.line.removeprefix('- [ ] ')}", [[("✔ Hotovo", f"td:{item.key}")]])
+    return ""
+
+
+def _today_buttons(items: list[agenda.Item]) -> Buttons:
+    return [[(f"✔ {i.title[:40]}", f"td:{i.key}")] for i in items[:10]]
+
+
+def _today_msg(ctx: Ctx) -> str:
+    try:
+        items = todo_today(ctx)
+    except ValueError as e:
+        return f"❌ {e}"
+    if not items:
+        return "Na dnes nic. 🎉"
+    say(ctx, "📋 Dnes\n" + "\n".join(item_line(ctx, i) for i in items), _today_buttons(items))
+    return ""
+
+
+def _block_json(b: agenda.Block, projects) -> dict:
+    return {"start": b.start.isoformat(timespec="minutes"), "end": b.end.isoformat(timespec="minutes"),
+            "title": b.item.title, "project": b.item.project(projects), "key": b.item.key}
+
+
+def agenda_data(ctx: Ctx, day) -> dict:
+    """The day for the morning plan and the dashboard: meetings, tasks, proposed time blocks."""
+    a = ctx.cfg.agenda
+    if a is None:
+        return {"configured": False}
+    tasks = agenda.today_items(agenda.parse(agenda.read(a.todo)), day)
+    out = {"configured": True, "day": day.isoformat(), "error": None, "events": [], "blocks": [],
+           "tasks": [{"title": i.title, "key": i.key, "project": i.project(ctx.cfg.projects),
+                      "late": bool(i.when and i.when < day), "line": i.line.strip()} for i in tasks]}
+    if ctx.cal is None:
+        out["error"] = "kalendář není připojený (harness gcal-auth)"
+        return out
+    try:
+        evs = ctx.cal.events(day)
+    except Exception as e:  # network, expired token: the tasks still show
+        out["error"] = f"kalendář: {type(e).__name__}: {str(e)[:200]}"
+        return out
+    out["events"] = [{"start": e.start.isoformat(timespec="minutes"), "end": e.end.isoformat(timespec="minutes"),
+                      "title": e.title, "all_day": e.all_day} for e in evs]
+    stored = ctx.state["blocks"]
+    if stored and stored["day"] == day.isoformat() and stored["written"]:
+        out["blocks"], out["written"] = stored["items"], True
+        return out
+    slots = gcal.free_slots(evs, day, a.work_hours, ctx.now())
+    blocks = agenda.plan_blocks(tasks, slots, timedelta(minutes=a.block_minutes))
+    out["blocks"], out["written"] = [_block_json(b, ctx.cfg.projects) for b in blocks], False
+    ctx.state["blocks"] = {"day": day.isoformat(), "items": out["blocks"], "written": False}
+    return out
+
+
+def _hm(iso: str) -> str:
+    return iso[11:16]
+
+
+def day_plan(ctx: Ctx, day) -> tuple[str, Buttons | None]:
+    d = agenda_data(ctx, day)
+    lines = [f"☀️ Plán dne {day.day}. {day.month}."]
+    if d["error"]:
+        lines.append(f"⚠️ {d['error']}")
+    meetings = [("celý den" if e["all_day"] else f"{_hm(e['start'])}–{_hm(e['end'])}") + f" {e['title']}"
+                for e in d["events"]]
+    if meetings:
+        lines += ["", "📅 Schůzky", *meetings]
+    tasks = [f"• {t['title']}" + (f" [{t['project']}]" if t["project"] else "") + (" ⚠️ po termínu" if t["late"] else "")
+             for t in d["tasks"]]
+    lines += ["", "✅ Úkoly", *(tasks or ["nic na dnes"])]
+    blocks = [f"{_hm(b['start'])}–{_hm(b['end'])} {b['title']}" for b in d["blocks"]]
+    if blocks:
+        lines += ["", "🎯 Návrh bloků", *blocks]
+    buttons = ([[("📅 Zapsat bloky", f"gb:{d['day']}")]] if blocks and not d.get("written") else []) \
+        + [[(f"✔ {t['title'][:40]}", f"td:{t['key']}")] for t in d["tasks"][:8]]
+    return "\n".join(lines), buttons or None
+
+
+def blocks_write(ctx: Ctx, day: str) -> str:
+    stored = ctx.state["blocks"]
+    if not stored or stored["day"] != day:
+        return "žádný návrh bloků pro tento den"
+    if stored["written"]:
+        return "bloky už jsou zapsané"
+    if ctx.cal is None:
+        return "kalendář není připojený"
+    written = 0
+    for b in stored["items"]:
+        try:
+            ctx.cal.insert(datetime.fromisoformat(b["start"]), datetime.fromisoformat(b["end"]), f"🎯 {b['title']}",
+                           f"#{b['project']}" if b["project"] else "")
+        except Exception as e:
+            stored["items"] = stored["items"][written:]  # a retry writes only the rest
+            return f"zapsáno {written}, pak chyba: {type(e).__name__}: {str(e)[:200]}"
+        written += 1
+    stored["written"] = True
+    return f"📅 zapsáno {written} bloků"
+
+
+def _dev(ctx: Ctx, arg: str) -> str:
+    if arg in ("on", "off"):
+        ctx.state["dev"] = arg == "on"
+    return f"🛠 Dev notifikace: {'zapnuté' if ctx.state['dev'] else 'vypnuté (návrhy a lekce jen v dashboardu)'}"
 
 
 # --- Telegram input ---------------------------------------------------------------------------------------
@@ -690,6 +865,15 @@ def _command(ctx: Ctx, cmd: str, arg: str = "") -> str:
         ctx.state["paused"] = False
         ctx.state["next_check"] = 0
         return "▶️ Autorun zapnut."
+    if cmd == "dev":
+        return _dev(ctx, arg)
+    if cmd == "dnes":
+        return _today_msg(ctx)
+    if cmd == "plan":
+        if ctx.cfg.agenda is None:
+            return "❌ chybí `agenda` v projects.yaml"
+        say(ctx, *day_plan(ctx, ctx.now().date()))
+        return ""
     if cmd == "digest":
         _send_digest(ctx)
         return ""
@@ -711,6 +895,12 @@ def _callback(ctx: Ctx, cb: dict) -> None:
             ctx.state["rejected_msgs"] = dict(list(rejected.items())[-50:])
     elif kind in ("la", "lr"):
         note = _decide_lesson(ctx, key, kind == "la")
+    elif kind == "gb":
+        _quiet(ctx.bot.ack, cb["id"], blocks_write(ctx, key))
+        return
+    elif kind == "td":
+        _quiet(ctx.bot.ack, cb["id"], todo_done(ctx, key))
+        return  # the /dnes list keeps its other buttons
     else:
         note = "neznámá akce"
     _quiet(ctx.bot.ack, cb["id"], note)
@@ -729,7 +919,12 @@ def handle(ctx: Ctx, update: dict) -> None:
         return
     if text.startswith("/"):
         cmd = text.split()[0][1:].split("@")[0].lower()
-        reply = _task_cmd(ctx, text) if cmd == "task" else _command(ctx, cmd, " ".join(text.split()[1:]))
+        if cmd == "task":
+            reply = _task_cmd(ctx, text)
+        elif cmd == "todo":
+            reply = _todo_msg(ctx, text.partition(" ")[2])
+        else:
+            reply = _command(ctx, cmd, " ".join(text.split()[1:]))
     else:
         reply = _answer(ctx, msg, text)
     if reply:
@@ -752,7 +947,7 @@ def snapshot(ctx: Ctx) -> dict:
         run, config = ctx.state["run"], _open(ctx)
         plans = approvals(ctx.app, config) if config and not ctx.state["approval"] else []
         now = ctx.now().timestamp()
-        return {"paused": ctx.state["paused"], "limits": [why_idle(p, f, now, p in ctx.state["paused_projects"]) for p, f in ctx.facts.items()],
+        return {"paused": ctx.state["paused"], "dev": ctx.state["dev"], "limits": [why_idle(p, f, now, p in ctx.state["paused_projects"]) for p, f in ctx.facts.items()],
                 "run": run and {**run, "status": "running" if ctx.busy else run["status"]},
                 "questions": [q | {"answered": q["id"] in ctx.state["answers"]}
                               for q in (questions(ctx.app, config) if config else [])],
@@ -805,6 +1000,18 @@ def act(ctx: Ctx, action: str, data: dict) -> str:
             reply = _edit_task(ctx, str(data.get("task")), *_task_fields(data), bool(data.get("approve")))
         elif action in ("pause", "resume"):
             reply = _command(ctx, action, str(data.get("project") or ""))
+        elif action == "todo_add":
+            project = str(data.get("project") or "")
+            if project and project not in ctx.cfg.projects:
+                raise ValueError(f"unknown project {project!r}")
+            item = todo_add(ctx, str(data.get("text") or "") + (f" #{project}" if project else ""))
+            reply = f"📝 {item.title}"
+        elif action == "todo_done":
+            reply = todo_done(ctx, str(data.get("key")))
+        elif action == "blocks":
+            reply = blocks_write(ctx, str(data.get("day")))
+        elif action == "dev":
+            reply = _dev(ctx, "on" if data.get("on") else "off")
         else:
             raise KeyError(action)
         if action in ("plan", "answer") and not ctx.busy:

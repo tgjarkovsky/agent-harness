@@ -9,11 +9,12 @@ import time
 from datetime import datetime
 from functools import partial
 from pathlib import Path
+from types import SimpleNamespace
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.store.sqlite import SqliteStore
 
-from . import backlog, events, lessons, quota, serve, trace, traces
+from . import backlog, events, gcal, lessons, quota, serve, trace, traces
 from .graph import build_graph, initial_state
 from .nodes.common import (make_approve, make_discover, make_pick_tasks, make_prioritize, make_reflect,
                            make_report)
@@ -223,7 +224,7 @@ def cmd_serve(args) -> int:
                     spawn=lambda job: threading.Thread(target=job, daemon=True).start(),
                     now=datetime.now, scan=lambda: _scan_into(cfg, backlog_path), state_path=state_path,
                     store=store, live_quota=quota.fetch, merged=traces.merged_since, sh=sh,
-                    merge=real_merge(cfg))
+                    merge=real_merge(cfg), cal=_calendar(cfg))
     web = create_app(args.home, control=ctx)
     ctx.prs = web.state.prs  # shared cache: conflict rebases and CI fixes run even with no dashboard open
     threading.Thread(target=uvicorn.run, args=(web,), kwargs={"host": "127.0.0.1", "port": args.port},
@@ -234,6 +235,33 @@ def cmd_serve(args) -> int:
         serve.loop(ctx)
     except KeyboardInterrupt:  # a running run continues from its checkpoint on the next start
         serve.save_state(state_path, ctx.state)
+    return 0
+
+
+def _calendar(cfg):
+    """No token yet: harness runs without the calendar (`harness gcal-auth`, then restart serve)."""
+    return gcal.Calendar(cfg.agenda.calendar) if cfg.agenda and gcal.TOKEN.exists() else None
+
+
+def cmd_gcal_auth(args) -> int:
+    if not gcal.CLIENT.exists():
+        print(f"Chybí {gcal.CLIENT}: Google Cloud Console → Calendar API → OAuth client „Desktop app“ → stáhnout JSON.",
+              file=sys.stderr)
+        return 2
+    gcal.DIR.mkdir(exist_ok=True)
+    print(f"Token uložen: {gcal.authorize()}")
+    return 0
+
+
+def cmd_today(args) -> int:
+    """The morning plan in the terminal; checks TODO.md and the calendar without Telegram."""
+    cfg = load_config(args.home / "projects.yaml")
+    if cfg.agenda is None:
+        print("Chybí `agenda` v projects.yaml.", file=sys.stderr)
+        return 2
+    ctx = SimpleNamespace(cfg=cfg, cal=_calendar(cfg), state={"blocks": None}, now=datetime.now)
+    text, _ = serve.day_plan(ctx, datetime.now().date())
+    print(text)
     return 0
 
 
@@ -328,6 +356,8 @@ def main(argv: list[str] | None = None) -> int:
     ls.add_argument("--project")
     ls.add_argument("--retire", metavar="PROJECT/ID")
     sub.add_parser("queue")
+    sub.add_parser("gcal-auth")
+    sub.add_parser("today")
     sc = sub.add_parser("scan")
     sc.add_argument("--write", action="store_true")
     sc.add_argument("--project")
@@ -335,7 +365,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     handlers = {"simulate": cmd_simulate, "run": cmd_run, "dashboard": cmd_dashboard, "prune": cmd_prune,
                 "queue": cmd_queue, "scan": cmd_scan, "serve": cmd_serve, "go": cmd_go, "stats": cmd_stats,
-                "lessons": cmd_lessons}
+                "lessons": cmd_lessons, "gcal-auth": cmd_gcal_auth, "today": cmd_today}
     return handlers[args.cmd](args)
 
 

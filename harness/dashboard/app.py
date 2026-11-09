@@ -6,14 +6,16 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from .. import backlog, events, quota, serve, traces
+from .. import agenda, backlog, events, quota, serve, traces
 from ..graph import graph_mermaid, worker_mermaid
 from ..nodes.real import fix_ci_with_agent, read_plan, resolve_conflict_with_agent
 from ..priority import config_focus, rank
@@ -136,7 +138,10 @@ def create_app(home: Path, control: serve.Ctx | None = None, prs=traces.open_prs
             cleanups = dict(zip(cfg.projects, pool.map(care.cleanup_of, paths, [last.get(n) for n in cfg.projects])))
         pulls = {name: care.with_conflicts(cfg.projects[name].path, pulls[name]) for name in cfg.projects}
         ranked = rank(tasks, set(cfg.projects), config_focus(cfg), {n: p.weight for n, p in cfg.projects.items()})
+        todos = [i for i in agenda.parse(agenda.read(cfg.agenda.todo)) if i.status == " "] if cfg.agenda else []
         projects = [{"name": name, "prs": pulls[name], "cleanup": cleanups[name],
+                     "todos": [{"title": i.title, "key": i.key, "when": i.when and i.when.isoformat()}
+                               for i in todos if i.project(cfg.projects) == name],
                      "queue": [asdict(t) for t in ranked if t.project == name],
                      "plan": (cfg.projects[name].path / PLAN_FILE).exists(),
                      "counts": {s: sum(t.project == name and t.status == s for t in tasks) for s in " ~x?-"}}
@@ -144,6 +149,16 @@ def create_app(home: Path, control: serve.Ctx | None = None, prs=traces.open_prs
         proposals = [asdict(t) for t in tasks if t.status == "~"]
         return {"projects": projects, "proposals": proposals, "serve": control and serve.snapshot(control),
                 "boot": boot, "limits": {"max_tasks": cfg.max_tasks_per_run, "max_parallel": cfg.max_parallel}}
+
+    @app.get("/agenda")
+    def day_agenda():
+        """Today's meetings, tasks and proposed blocks; without serve only the tasks (no calendar)."""
+        if control is not None:
+            with control.lock:
+                return serve.agenda_data(control, control.now().date())
+        cfg = load_config(home / "projects.yaml")
+        ctx = SimpleNamespace(cfg=cfg, cal=None, state={"blocks": None}, now=datetime.now)
+        return serve.agenda_data(ctx, datetime.now().date())
 
     @app.post("/control/{action}", dependencies=[Depends(require_local_origin)])
     def control_action(action: str, body: dict | None = None):

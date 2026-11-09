@@ -12,7 +12,7 @@
   body { margin:0; min-height:100vh; font:16px/1.45 system-ui, sans-serif; color:var(--text); background:var(--bg); }
   /* left gutter for desktop icons, bottom for the taskbar */
   .wrap { padding:20px 32px 64px 140px; display:grid; gap:14px; grid-template-rows:auto auto auto minmax(0,1fr); }
-  .cols { display:grid; gap:14px; grid-template-columns:minmax(0,1fr) 480px; align-items:start; min-height:0; }
+  .cols { display:grid; gap:14px; grid-template-columns:400px minmax(0,1fr) 480px; align-items:start; min-height:0; }
   .col { display:grid; gap:12px; min-width:0; align-content:start; }
   /* the wallpaper (Lively) may get no mouse wheel: each column scrolls by its scrollbar or by dragging the content */
   @media (min-width:1101px) {
@@ -139,6 +139,20 @@
   #toast.show { opacity:1; }
   button[aria-pressed=true] { border-color:var(--accent); }
 
+  /* today: meetings and blocks on one timeline, personal tasks */
+  .tl li { display:flex; gap:10px; align-items:baseline; font-size:15px; padding:4px 8px; border-left:3px solid var(--line); border-radius:4px; }
+  .tl li.block { border-left-color:var(--accent); background:rgba(140,152,255,.08); }
+  .tl li.past { opacity:.5; }
+  .tl .hm { font-variant-numeric:tabular-nums; color:var(--muted); font-size:13px; white-space:nowrap; min-width:88px; }
+  .todo li { display:flex; gap:8px; align-items:center; font-size:15px; min-width:0; }
+  .todo li .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .todo li.late .t::after { content:" · po termínu"; color:var(--warn); font-size:13px; }
+  .todo li button { padding:1px 8px; }
+  #todoForm { margin-top:10px; }
+  /* dev off: runs, pipeline, tokens and lessons stay out of sight; autorun keeps going */
+  body.nodev :is(.bar, #flow, .chart, #lessonsBox, #historyBox) { display:none; }
+  body.nodev .wrap { grid-template-rows:auto minmax(0,1fr); }
+
   /* blur: hide what PRs and tasks say, keep counts, states and buttons readable */
   body.blurred .sens { filter:blur(5px); }
 </style>
@@ -150,6 +164,7 @@
     <div class="status" id="status"><span class="muted">načítám…</span></div>
     <div class="quota" id="quotaMini"></div>
     <span class="spacer"></span>
+    <button class="small" data-a="dev" id="devToggle" aria-pressed="false" title="Vývoj: běhy, pipeline, návrhy a lekce v dashboardu i Telegramu">🛠 Dev</button>
     <button class="small" id="blurredToggle" aria-pressed="false" title="Rozmazat obsah PR a úkolů">🙈 Rozmazat</button>
   </header>
 
@@ -179,6 +194,19 @@
 
   <div class="cols">
     <div class="col">
+      <section><h2>Dnes <span class="count" id="todayDate"></span><span class="spacer"></span>
+        <button class="small primary" data-a="blocks" id="writeBlocks" hidden title="Zapíše navržené bloky do Google Calendar">📅 Zapsat bloky</button></h2>
+        <div id="agendaNote" class="muted" hidden></div>
+        <ul class="tl" id="timeline"></ul></section>
+      <section><h2>Úkoly <span class="count" id="todoCount"></span></h2>
+        <ul class="todo" id="todos"></ul>
+        <form id="todoForm" data-form="todo" class="row">
+          <input type="text" name="text" required placeholder="nový úkol… (zítra, pá, 2026-11-12)" aria-label="Nový úkol">
+          <select name="project" aria-label="Projekt"><option value="">bez projektu</option></select>
+          <button class="primary">Přidat</button></form></section>
+    </div>
+
+    <div class="col">
       <section><h2>Na mě čeká <span class="count" id="inboxCount">0</span></h2>
         <div class="filters" id="inboxFilter"></div>
         <div id="inbox"></div>
@@ -194,7 +222,7 @@
         <div class="stack"><div id="detailData"></div><div id="detailStatic"></div></div></section>
       <section class="chart"><h2>Tokeny (14 dní)</h2><div id="chart"></div><div id="cost" class="muted"></div></section>
       <section id="lessonsBox" hidden><h2>Aktivní lekce</h2><div id="lessons"></div></section>
-      <section><details><summary>Historie autorunu</summary><input type="date" id="historyDay"><pre id="history" class="muted"></pre></details></section>
+      <section id="historyBox"><details><summary>Historie autorunu</summary><input type="date" id="historyDay"><pre id="history" class="muted"></pre></details></section>
     </div>
   </div>
 </div>
@@ -204,7 +232,7 @@
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 let serveOn = false, boot = null, O = null, proposals = [], lessonsAll = [];
-let selected = null, typeFilter = "", paused = false;
+let selected = null, typeFilter = "", paused = false, devOn = true, A = null;
 let keys = {status: "", projects: "", detail: "", detailStatic: "", lessons: "", filter: ""};
 let excluded = new Set();  // unchecked in the project list; a new project starts checked
 try { excluded = new Set(JSON.parse(localStorage.getItem("excluded") || "[]")); } catch (e) {}
@@ -330,6 +358,10 @@ let agentResolving = false;
 function renderStatus(s) {
   serveOn = !!s;
   paused = !!(s && s.paused);
+  devOn = !s || s.dev !== false;  // without serve there is nothing to hide the dev part behind
+  document.body.classList.toggle("nodev", !devOn);
+  $("devToggle").setAttribute("aria-pressed", devOn);
+  $("devToggle").disabled = !serveOn;
   runActive = !!(s && s.run && ACTIVE.includes(s.run.status));
   document.querySelectorAll("button.action").forEach(b => {
     b.disabled = !serveOn || runActive;
@@ -490,6 +522,7 @@ function inboxItems(o, only = null) {  // `only`: a project the proposals are na
     else if (pr.ci === "ok" && !pr.isDraft && pr.mergeable !== "CONFLICTING") items.push(readyItem(p.name, pr));
   }
   if (s) for (const m of s.merges) items.push(mergeItem(m));
+  if (!devOn) return items.sort((a, b) => a.rank - b.rank || a.project.localeCompare(b.project));  // proposals and lessons wait
   items.push(...proposalItems(o.proposals.filter(t => !only || t.project === only)));
   const proposed = (s ? s.lessons : []).filter(l => l.status === "proposed");
   if (proposed.length) items.push(lessonItem(proposed));
@@ -565,6 +598,7 @@ function projectRow(p, waiting) {
     <input type="checkbox" class="scope" value="${esc(p.name)}" ${excluded.has(p.name) ? "" : "checked"} aria-label="Zahrnout do běhu: ${esc(p.name)}" title="Zahrnout do spuštěného běhu">
     <span class="name sens">${esc(p.name)}</span>
     ${waiting ? `<span class="b wait" title="Čeká na tebe v Inboxu">! ${waiting}</span>` : ""}
+    ${p.todos.length ? `<span class="b" title="Osobní úkoly s tagem #${esc(p.name)}">📝 ${p.todos.length}</span>` : ""}
     ${prBadge(p)}${num(c[" "], "fronta")}${num(c["~"], "návrhů")}${num(c["?"], "nejasné", "wait")}
     ${cleanupBadge(p.cleanup)}${p.plan ? "" : `<span class="b dim" title="Bez ROADMAP.md navrhuje scout features bez směru">bez plánu</span>`}</div>`;
 }
@@ -588,8 +622,9 @@ function renderDetail(o) {
   const dkey = JSON.stringify([p, serveOn]);
   if (dkey !== keys.detail) {
     keys.detail = dkey;
-    $("detailData").innerHTML = p.prs === null ? `<span class="muted">PR nejdou načíst (gh)</span>`
-      : p.prs.length ? `<ul>${p.prs.map(pr => `<li class="pr">${prLine(p.name, pr)}</li>`).join("")}</ul>` : `<span class="muted">žádné otevřené PR</span>`;
+    $("detailData").innerHTML = (p.prs === null ? `<span class="muted">PR nejdou načíst (gh)</span>`
+      : p.prs.length ? `<ul>${p.prs.map(pr => `<li class="pr">${prLine(p.name, pr)}</li>`).join("")}</ul>` : `<span class="muted">žádné otevřené PR</span>`)
+      + (p.todos.length ? `<ul class="todo" style="margin-top:10px">${p.todos.map(todoLi).join("")}</ul>` : "");
   }
   // the form and the plan viewer render once per selection: refreshes must not wipe what is typed
   const skey = `${p.name}:${p.plan}`;
@@ -640,6 +675,58 @@ function renderLessons(list) {
   $("lessons").innerHTML = `<details><summary>Aktivní lekce (${active.length})</summary><ul style="margin-top:6px">${active.map(l =>
     `<li class="prop">${chip(l.project)}<span class="sens" style="flex:1;min-width:0">${esc(l.text)}</span>
       <button data-a="lesson" data-lesson="${esc(l.id)}" data-project="${esc(l.project)}" data-approve="0" title="Vyřadit" aria-label="Vyřadit" ${dis()}>vyřadit</button></li>`).join("")}</ul></details>`;
+}
+
+/* ---------- today: calendar + personal tasks ---------- */
+
+const hm = iso => iso.slice(11, 16);
+
+function todoLi(t) {
+  const when = t.when ? `<span class="muted">${new Date(t.when).toLocaleDateString("cs", {day: "numeric", month: "numeric"})}</span>` : "";
+  return `<li class="${t.late ? "late" : ""}"><button data-a="todoDone" data-key="${esc(t.key)}" title="Hotovo" aria-label="Hotovo: ${esc(t.title)}">✔</button>
+    <span class="t sens" title="${esc(t.title)}">${esc(t.title)}</span>${t.project ? chip(t.project) : ""}${when}</li>`;
+}
+
+function renderAgenda(a) {
+  A = a;
+  if (!a.configured) {
+    $("agendaNote").hidden = false;
+    $("agendaNote").textContent = "Osobní agenda není nastavená: doplň `agenda.todo` do projects.yaml.";
+    $("todoForm").hidden = true;
+    return;
+  }
+  $("todoForm").hidden = false;
+  $("todayDate").textContent = new Date(a.day).toLocaleDateString("cs", {weekday: "short", day: "numeric", month: "numeric"});
+  $("agendaNote").hidden = !a.error;
+  $("agendaNote").textContent = a.error || "";
+  const now = new Date().toLocaleString("sv").slice(0, 16).replace(" ", "T");
+  const rows = [...a.events.map(e => ({...e, kind: "event"})), ...a.blocks.map(b => ({...b, kind: "block"}))]
+    .sort((x, y) => (x.all_day ? "" : x.start).localeCompare(y.all_day ? "" : y.start));
+  $("timeline").innerHTML = rows.length ? rows.map(r => `<li class="${r.kind === "block" ? "block" : ""} ${!r.all_day && r.end < now ? "past" : ""}">
+      <span class="hm">${r.all_day ? "celý den" : `${hm(r.start)}–${hm(r.end)}`}</span>
+      <span class="sens">${r.kind === "block" ? "🎯 " : ""}${esc(r.title)}</span>${r.project ? chip(r.project) : ""}</li>`).join("")
+    : `<li class="muted">Žádné schůzky.</li>`;
+  $("writeBlocks").hidden = !a.blocks.length || a.written || !serveOn;
+  $("todoCount").textContent = a.tasks.length;
+  $("todos").innerHTML = a.tasks.length ? a.tasks.map(todoLi).join("") : `<li class="muted">Na dnes nic.</li>`;
+}
+
+function renderProjectOptions(o) {
+  const sel = $("todoForm").elements.project, names = o.projects.map(p => p.name);
+  if (sel.dataset.names === names.join(",")) return;  // keep the owner's pick across refreshes
+  sel.dataset.names = names.join(",");
+  sel.innerHTML = `<option value="">bez projektu</option>` + names.map(n => `<option>${esc(n)}</option>`).join("");
+}
+
+async function refreshAgenda() {
+  try { renderAgenda(await (await fetch("/agenda")).json()); }
+  catch (e) { $("agendaNote").hidden = false; $("agendaNote").textContent = "agenda nedostupná"; }
+}
+
+async function agendaAct(action, body) {
+  const ok = await act(action, body);
+  refreshAgenda();
+  return ok;
 }
 
 /* ---------- usage ---------- */
@@ -714,6 +801,7 @@ function render(o) {
   proposals = o.proposals;
   if (selected && !o.projects.some(p => p.name === selected)) selected = null;
   renderStatus(o.serve);
+  renderProjectOptions(o);
   renderLimits(o.limits);
   renderRunSub();
   const items = inboxItems(o);  // unfiltered: counts and the per-project badges
@@ -785,6 +873,9 @@ document.addEventListener("click", e => {
     case "back": b.closest(".card").dataset.sig = ""; refresh(); break;  // a different sig makes the next render rebuild the card
     case "lesson": act("lesson", {project: d.project, id: d.lesson, approve: d.approve === "1"}); break;
     case "planCC": planSession(d.project); break;
+    case "dev": act("dev", {on: !devOn}); break;
+    case "todoDone": b.disabled = true; agendaAct("todo_done", {key: d.key}); break;
+    case "blocks": if (A) { b.disabled = true; agendaAct("blocks", {day: A.day}).finally(() => { b.disabled = false; }); } break;
   }
 });
 
@@ -806,12 +897,14 @@ document.addEventListener("submit", async e => {
     priority: +v.priority.value, approve: e.submitter.value === "1"});
   else if (kind === "add" && await act("add", {project: f.dataset.project, title: v.title.value, description: v.description.value,
     done: v.done.value, priority: +v.priority.value})) f.reset();
+  else if (kind === "todo" && await agendaAct("todo_add", {text: v.text.value, project: v.project.value})) v.text.value = "";
 });
 
 // toggle does not bubble: capture it to load a project plan on first open
 document.addEventListener("toggle", e => { if (e.target.matches("details[data-plan]")) loadPlan(e.target); }, true);
 
-refresh(); refreshUsage();
+refresh(); refreshUsage(); refreshAgenda();
+setInterval(refreshAgenda, 60000);
 let ticks = 0;
 setInterval(() => { if (runActive || agentResolving || ++ticks % 5 === 0) refresh(); }, 3000);  // live while a run or conflict agent is active
 setInterval(refreshUsage, 60000);

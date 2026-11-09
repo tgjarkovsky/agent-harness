@@ -45,6 +45,15 @@ class Serve:
 
 
 @dataclass(frozen=True)
+class Agenda:
+    """Personal work: tasks in an Obsidian Tasks file, meetings and time blocks in Google Calendar."""
+    todo: Path
+    calendar: str = "primary"
+    work_hours: tuple[time, time] = (time(9), time(18))
+    block_minutes: int = 90
+
+
+@dataclass(frozen=True)
 class Config:
     billing: str
     max_tasks_per_run: int
@@ -54,6 +63,7 @@ class Config:
     secondbrain: tuple[Path, int] | None = None  # (vault path, look-back days)
     serve: Serve = field(default_factory=Serve)
     plan_model: str = "opus"
+    agenda: Agenda | None = None
 
 
 def load_config(path: Path) -> Config:
@@ -73,15 +83,26 @@ def load_config(path: Path) -> Config:
     brain = raw.get("secondbrain")
     secondbrain = ((path.parent / brain["path"]).resolve(), brain.get("days", 14)) if brain else None
     return Config(billing, raw.get("max_tasks_per_run", 3), raw.get("quota_threshold", 0.7), projects,
-                  max_parallel, secondbrain, _serve(raw.get("serve") or {}), raw.get("plan_model", "opus"))
+                  max_parallel, secondbrain, _serve(raw.get("serve") or {}), raw.get("plan_model", "opus"),
+                  _agenda(raw["agenda"], path.parent) if raw.get("agenda") else None)
 
 
-def _time(text: str) -> time:
+def _time(text: str, key: str = "serve.digest_at") -> time:
     m = TIME_RE.match(str(text))
     try:
         return time(int(m[1]), int(m[2]))
     except (TypeError, ValueError):  # no match / hour 25
-        raise ValueError(f"serve.digest_at must look like 07:00, got {text!r}") from None
+        raise ValueError(f"{key} must look like 07:00, got {text!r}") from None
+
+
+def _agenda(raw: dict, root: Path) -> Agenda:
+    if not raw.get("todo"):
+        raise ValueError("agenda.todo: path to the TODO.md is required")
+    start, _, end = str(raw.get("work_hours", "09:00-18:00")).partition("-")
+    hours = (_time(start, "agenda.work_hours"), _time(end, "agenda.work_hours"))
+    if hours[0] >= hours[1]:
+        raise ValueError(f"agenda.work_hours must look like 09:00-18:00, got {raw.get('work_hours')!r}")
+    return Agenda((root / raw["todo"]).resolve(), raw.get("calendar", "primary"), hours, int(raw.get("block_minutes", 90)))
 
 
 def _serve(raw: dict) -> Serve:
