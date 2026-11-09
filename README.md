@@ -1,6 +1,6 @@
 # harness
 
-LangGraph orchestrátor: úkol z `BACKLOG.md` → plán (Opus) → implementace (Sonnet) ve worktree → verify → draft PR. Modely běží přes Claude Agent SDK na subscription.
+Správa mojí práce (kalendář, úkoly, plán dne) a pod ní LangGraph orchestrátor: úkol z `BACKLOG.md` → plán (Opus) → implementace (Sonnet) ve worktree → verify → draft PR. Modely běží přes Claude Agent SDK na subscription.
 
     python -m venv .venv && .venv/Scripts/python -m pip install -e ".[dev]"
     .venv/Scripts/harness simulate flaky-tests [--step]
@@ -18,6 +18,44 @@ Fáze 2: `run` zpracovává až `max_parallel` úkolů z různých projektů naj
 Fáze 3: když plánovač označí úkol za nejasný, worker se zeptá (uzel `clarify`, LangGraph `interrupt`) a běh skončí ve stavu `waiting`. Na dotaz se odpovídá v terminálu (`run` / `simulate`), v dashboardu nebo z Telegramu. Po 2 kolech dotazů nebo po přeskočení se úkol zapíše jako `[?]`. Zamítnutý návrh má stav `[-]`.
 
 Ověření hotovosti: plánovač z „Hotovo =“ v popisu úkolu odvodí řádek `ACCEPT: <příkaz>` (typicky konkrétní nový test). `verify` ho pustí vedle `verify` příkazů projektu a baseline ho nikdy neomluví. Když verify vrátí stejnou chybu jako minule (čísla se ignorují) nebo dojdou pokusy, worker se jednou vrátí do `plan` (uzel `replan`) s minulým plánem a chybou a pokusy začnou znovu. Další neúspěch → `[!]`.
+
+## Osobní agenda
+
+Úkoly jsou v `secondbrain/TODO.md` ve formátu pluginu Obsidian Tasks, takže je jde upravovat v Obsidianu i z harnessu:
+
+```
+- [ ] Zavolat klientovi #guth-pictures 📅 2026-11-12 ⏫
+- [ ] Zalít kytky #kytky 🔁 every week ⏳ 2026-11-10
+```
+
+Harness čte stav, text, `#tagy`, `📅` termín, `⏳` naplánováno, prioritu `🔺⏫🔼🔽`, `🔁 every N day|week|month|year` a `✅`. Zbytek řádku nechá být. Tag se jménem projektu z `projects.yaml` úkol k projektu přiřadí. Na dnes patří úkoly po termínu, s termínem nebo plánem na dnešek a úkoly s prioritou ⏫/🔺 bez data. Opakovaný úkol po odškrtnutí dostane nad sebe další výskyt, stejně jako v Obsidianu.
+
+Nastavení v `projects.yaml`:
+
+```yaml
+agenda: {todo: ../secondbrain/TODO.md, calendar: primary, work_hours: "09:00-18:00", block_minutes: 90}
+```
+
+Google Calendar:
+1. V Google Cloud Console založ projekt, zapni Google Calendar API a vytvoř OAuth client typu „Desktop app“. JSON ulož jako `~/.harness/gcal_client.json`.
+2. `.venv/Scripts/harness gcal-auth` otevře prohlížeč a uloží token do `~/.harness/gcal_token.json`.
+3. Restartuj serve.
+
+`.venv/Scripts/harness today` vypíše plán dne v terminálu (ověření bez Telegramu).
+
+Ráno v `serve.digest_at` přijde místo digestu plán dne: schůzky, úkoly a návrh bloků do volných oken pracovní doby (úkoly po řadě, každý nejvýš `block_minutes`). Tlačítko „📅 Zapsat bloky“ je zapíše do kalendáře jako `🎯 <úkol>`. Bez tokenu přijde plán bez schůzek a bloků.
+
+Telegram: `/todo <text>` přidá úkol (`dnes`, `zítra`, `pozítří`, `po`–`ne` nebo `2026-11-12` se změní na `📅`), `/dnes` vypíše dnešní úkoly s tlačítky ✔, `/plan` pošle plán dne hned.
+
+Dashboard `/desktop` má vlevo sloupec Dnes: schůzky a bloky na časové ose, dnešní úkoly s ✔ a formulář na nový úkol. U projektu je počet jeho úkolů (📝) a v detailu jejich seznam.
+
+### Přepínač Dev
+
+`/dev on|off` v Telegramu nebo 🛠 Dev v hlavičce dashboardu. Výchozí je vypnuto:
+- návrhy `[~]`, lekce a výsledky oprav CI nechodí do Telegramu, plán dne má jen řádek „🛠 Dev: …“,
+- dashboard skryje tlačítka běhů, pipeline, graf tokenů, lekce a historii, v Inboxu zůstanou dotazy, PR a slučování návrhů.
+
+Autorun běží dál a dotazy k nejasným úkolům i chyby démona chodí do Telegramu vždy. Co přibylo s vypnutým Dev, se po zapnutí do Telegramu zpětně neposílá, najdeš to v dashboardu.
 
 ## `harness go`
 

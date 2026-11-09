@@ -51,7 +51,7 @@ class Env:
         self.bot = FakeBot()
         self.scans = []
         cfg = replace(self.sim.cfg, serve=Serve(time(7), timeout, scan is not None))
-        state = serve.default_state(now) | {"digest_since": 0, "paused": not auto}
+        state = serve.default_state(now) | {"digest_since": 0, "paused": not auto, "dev": True}
         self.ctx = serve.Ctx(cfg=cfg, bot=self.bot, app=self.sim.app, backlog_path=self.sim.backlog_path,
                              conn=events.connect(tmp_path / "h.db"), new_inputs=lambda rid: self.sim.inputs | {"run_id": rid},
                              state=state, spawn=lambda f: f(), now=lambda: self.clock[0],

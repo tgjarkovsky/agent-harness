@@ -72,7 +72,7 @@ def make_pr_care(home: Path, control: serve.Ctx | None, prs, merged, resolve, fi
                 detail = getattr(e, "stderr", None) or str(e)
                 note = f"🔴 PR #{pr['number']} ({project.name}): CI se nepodařilo opravit: {detail[-500:]}"
         pr_cache.pop(path, None)
-        if control is not None:
+        if control is not None and control.state["dev"]:  # dev off: the PR list in the dashboard shows CI
             serve.say(control, note)
 
     def resolve_one(path: Path, pr: dict) -> None:

@@ -107,3 +107,4 @@
 ## [2026-10-29] - Dashboard: fronta úkolů u projektu s vrácením do návrhů
 ## [2026-10-30] - Dashboard /desktop: layout inbox + projekty, odstraněn skin Mlékárna
 ## [2026-10-30] - Dashboard /desktop: Inbox ve více sloupcích, návrhy rozdělené podle typu, jedna pravá lišta
+## [2026-11-09] - Osobní agenda: úkoly v secondbrain/TODO.md (Obsidian Tasks), Google Calendar, ranní plán dne s bloky na 1 klik, /todo /dnes /plan /dev, dashboard se sloupcem Dnes a přepínačem Dev
