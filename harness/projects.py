@@ -50,6 +50,10 @@ class Agenda:
     todo: Path
     work_hours: tuple[time, time] = (time(9), time(18))
     block_minutes: int = 90
+    suggest_at: tuple[time, ...] = (time(7), time(14))  # task suggestions from new e-mails and calendar events
+    remind_today_at: time | None = time(15)  # deadlines of today still open
+    remind_tomorrow_at: time | None = time(20)  # deadlines of tomorrow
+    soon_days: int = 3  # the day plan's "coming up" reaches this far
 
 
 @dataclass(frozen=True)
@@ -101,7 +105,12 @@ def _agenda(raw: dict, root: Path) -> Agenda:
     hours = (_time(start, "agenda.work_hours"), _time(end, "agenda.work_hours"))
     if hours[0] >= hours[1]:
         raise ValueError(f"agenda.work_hours must look like 09:00-18:00, got {raw.get('work_hours')!r}")
-    return Agenda((root / raw["todo"]).resolve(), hours, int(raw.get("block_minutes", 90)))
+    at = raw.get("suggest_at", ["07:00", "14:00"])
+    remind = {k: (None if raw.get(k, d) is None else _time(raw.get(k, d), f"agenda.{k}"))
+              for k, d in (("remind_today_at", "15:00"), ("remind_tomorrow_at", "20:00"))}
+    return Agenda((root / raw["todo"]).resolve(), hours, int(raw.get("block_minutes", 90)),
+                  tuple(sorted(_time(t, "agenda.suggest_at") for t in (at if isinstance(at, list) else [at]))),
+                  remind["remind_today_at"], remind["remind_tomorrow_at"], int(raw.get("soon_days", 3)))
 
 
 def _serve(raw: dict) -> Serve:

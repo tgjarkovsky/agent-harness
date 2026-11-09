@@ -72,7 +72,12 @@ class FakeCal:
     def events(self, day):
         if self.fail:
             raise OSError("offline")
-        return self.events_
+        return [e for e in self.events_ if e.start.date() == day]
+
+    def upcoming(self, first, days):
+        if self.fail:
+            raise OSError("offline")
+        return [e for e in self.events_ if 0 <= (e.start.date() - first).days < days]
 
 
 def morning_env(tmp_path, cal, dev=False):

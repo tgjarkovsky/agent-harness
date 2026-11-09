@@ -6,7 +6,7 @@ import sys
 import tempfile
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.store.sqlite import SqliteStore
 
-from . import backlog, events, gcal, lessons, quota, serve, trace, traces
+from . import agenda, backlog, events, gcal, lessons, mail, quota, serve, suggest, trace, traces
 from .graph import build_graph, initial_state
 from .nodes.common import (make_approve, make_discover, make_pick_tasks, make_prioritize, make_reflect,
                            make_report)
@@ -24,7 +24,7 @@ from .priority import config_focus, rank_by_config
 from .discover import format_plan, parse_approval
 from .runner import approvals, execute, pending, questions, run_config
 from .scan import proposal_lines, scan_all
-from .sdk import check_billing
+from .sdk import check_billing, run_agent
 from .simulate import prepare
 from .telegram import NoTelegram, Telegram
 
@@ -224,7 +224,8 @@ def cmd_serve(args) -> int:
                     spawn=lambda job: threading.Thread(target=job, daemon=True).start(),
                     now=datetime.now, scan=lambda: _scan_into(cfg, backlog_path), state_path=state_path,
                     store=store, live_quota=quota.fetch, merged=traces.merged_since, sh=sh,
-                    merge=real_merge(cfg), cal=_calendar(cfg))
+                    merge=real_merge(cfg), cal=_calendar(cfg),
+                    mail=_inbox(cfg), suggest_model=suggest_model)
     web = create_app(args.home, control=ctx)
     ctx.prs = web.state.prs  # shared cache: conflict rebases and CI fixes run even with no dashboard open
     threading.Thread(target=uvicorn.run, args=(web,), kwargs={"host": "127.0.0.1", "port": args.port},
@@ -241,6 +242,40 @@ def cmd_serve(args) -> int:
 def _calendar(cfg):
     """No HARNESS_GCAL_ICS: harness runs without the calendar (set it, then restart serve)."""
     return gcal.from_env() if cfg.agenda else None
+
+
+def _inbox(cfg):
+    """No HARNESS_GMAIL_USER / HARNESS_GMAIL_APP_PASSWORD: suggestions come from the calendar alone."""
+    return mail.from_env() if cfg.agenda else None
+
+
+def suggest_model(prompt: str) -> str:
+    """No tools: e-mails are untrusted text, the worst they can do is a bad suggestion the owner rejects."""
+    return run_agent(prompt, cwd=tempfile.gettempdir(), model="sonnet", tools=[], permission_mode="dontAsk",
+                     max_turns=1).text
+
+
+def cmd_suggest(args) -> int:
+    """Task suggestions from the e-mails of the last `--days` days and the next 14 days of the calendar;
+    printed only, nothing is written or sent."""
+    cfg = load_config(args.home / "projects.yaml")
+    if cfg.agenda is None:
+        print("Chybí `agenda` v projects.yaml.", file=sys.stderr)
+        return 2
+    inbox, cal, today = _inbox(cfg), _calendar(cfg), datetime.now().date()
+    ctx = SimpleNamespace(mail=inbox, cal=cal)
+    mails, evs, errors = serve._gather(ctx, datetime.now() - timedelta(days=args.days), today, set())
+    for e in errors + ([] if inbox else [f"mail: chybí {mail.USER_ENV} / {mail.PASSWORD_ENV}"]):
+        print(f"⚠️ {e}")
+    print(f"Mailů: {len(mails)}, událostí: {len(evs)}")
+    if not mails and not evs:
+        return 0
+    tasks = [i for i in agenda.parse(agenda.read(cfg.agenda.todo)) if i.status == " "]
+    props = suggest.parse(suggest_model(suggest.prompt(mails, evs, tasks, today, cfg.projects)), mails, evs, today, cfg.projects)
+    for p in props:
+        print(f"\n- [ ] {p['line']}\n  ↳ {p['why']}\n  {p['origin']}")
+    print(f"\nNávrhů: {len(props)}")
+    return 0
 
 
 def cmd_today(args) -> int:
@@ -347,6 +382,8 @@ def main(argv: list[str] | None = None) -> int:
     ls.add_argument("--retire", metavar="PROJECT/ID")
     sub.add_parser("queue")
     sub.add_parser("today")
+    sg = sub.add_parser("suggest")
+    sg.add_argument("--days", type=int, default=3)
     sc = sub.add_parser("scan")
     sc.add_argument("--write", action="store_true")
     sc.add_argument("--project")
@@ -354,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     handlers = {"simulate": cmd_simulate, "run": cmd_run, "dashboard": cmd_dashboard, "prune": cmd_prune,
                 "queue": cmd_queue, "scan": cmd_scan, "serve": cmd_serve, "go": cmd_go, "stats": cmd_stats,
-                "lessons": cmd_lessons, "today": cmd_today}
+                "lessons": cmd_lessons, "today": cmd_today, "suggest": cmd_suggest}
     return handlers[args.cmd](args)
 
 

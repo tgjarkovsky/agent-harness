@@ -30,20 +30,24 @@ def _local(value) -> tuple[datetime, bool]:
     return (value.astimezone().replace(tzinfo=None) if value.tzinfo else value), False
 
 
-def parse_ics(text: str | bytes, day: date) -> list[Event]:
-    """Events of one day, recurring ones expanded; cancelled ones dropped."""
+def parse_range(text: str | bytes, first: date, days: int = 1) -> list[Event]:
+    """Events from `first` for `days` days, recurring ones expanded; cancelled ones dropped."""
     import icalendar
     import recurring_ical_events
     # ponytail: declined invitations still show; telling them apart needs the owner's e-mail in the feed's ATTENDEE lines
     out = []
-    for c in recurring_ical_events.of(icalendar.Calendar.from_ical(text)).at(day):
+    for c in recurring_ical_events.of(icalendar.Calendar.from_ical(text)).between(first, first + timedelta(days=days)):
         if str(c.get("STATUS", "")).upper() == "CANCELLED":
             continue
         start, all_day = _local(c["DTSTART"].dt)
         end = _local(c["DTEND"].dt)[0] if c.get("DTEND") else start + (c["DURATION"].dt if c.get("DURATION") else timedelta())
         out.append(Event(start, end, str(c.get("SUMMARY", "(bez názvu)")), all_day,
                          str(c.get("TRANSP", "")).upper() == "TRANSPARENT"))
-    return sorted(out, key=lambda e: (not e.all_day, e.start))
+    return sorted(out, key=lambda e: (e.start.date(), not e.all_day, e.start))
+
+
+def parse_ics(text: str | bytes, day: date) -> list[Event]:
+    return parse_range(text, day)
 
 
 class Calendar:
@@ -52,15 +56,18 @@ class Calendar:
     def __init__(self, url: str, fetch=None):
         self._url = url
         self._fetch = fetch or (lambda u: urllib.request.urlopen(u, timeout=20).read())
-        self._cache: dict[date, tuple[float, list[Event]]] = {}  # the dashboard asks every minute, under serve's lock
+        self._cache: dict[tuple[date, int], tuple[float, list[Event]]] = {}  # the dashboard asks every minute
 
-    def events(self, day: date) -> list[Event]:
-        hit = self._cache.get(day)
+    def upcoming(self, first: date, days: int) -> list[Event]:
+        hit = self._cache.get((first, days))
         if hit and _time.monotonic() - hit[0] < CACHE_SECONDS:
             return hit[1]
-        out = parse_ics(self._fetch(self._url), day)
-        self._cache[day] = (_time.monotonic(), out)
+        out = parse_range(self._fetch(self._url), first, days)
+        self._cache[(first, days)] = (_time.monotonic(), out)
         return out
+
+    def events(self, day: date) -> list[Event]:
+        return self.upcoming(day, 1)
 
 
 def from_env() -> Calendar | None:
