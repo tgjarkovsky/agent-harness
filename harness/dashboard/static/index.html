@@ -64,7 +64,7 @@
     <h2 style="margin-top:12px">Volání agentů</h2><div class="scroll"><table id="calls"></table></div></section>
   <section><h2>Backlog</h2><table id="backlog"></table></section>
   <section><h2>Spotřeba</h2><div id="quota"></div><table id="usage"></table></section>
-  <section><h2>Cena za úkol</h2><div class="scroll"><table id="costs"></table></div></section>
+  <section><h2>Cena za úkol</h2><div class="scroll"><table id="cost-summary"></table><table id="costs"></table></div></section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js" integrity="sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2" crossorigin="anonymous"></script>
 <script>
@@ -154,7 +154,9 @@ async function showSteps(callId) {
 }
 
 async function loadCosts() {
-  const { tasks, overhead } = await api("/costs");
+  const { tasks, overhead, summary } = await api("/costs");
+  $("cost-summary").innerHTML = "<tr><th>Projekt</th><th>Model plánovače</th><th>Úkolů</th><th>merged</th><th>closed</th><th>[!]</th><th>[?]</th><th>open</th><th>Cena celkem</th><th>Za merged</th></tr>" + summary.map((g) =>
+    `<tr><td>${esc(g.project)}</td><td class="muted">${esc(g.plan_model)}</td><td>${g.tasks}</td><td>${g.merged}</td><td>${g.closed}</td><td>${g.failed}</td><td>${g.unclear}</td><td>${g.open}</td><td>$${g.cost_usd.toFixed(2)}</td><td>${g.cost_per_merged == null ? "-" : "$" + g.cost_per_merged.toFixed(2)}</td></tr>`).join("");
   $("costs").innerHTML = "<tr><th>Úkol</th><th>Projekt</th><th>Stav</th><th>Pokusy</th><th>Tokeny</th><th title="≈ odhad u subscription, API = skutečně zaplaceno">Cena</th></tr>" + tasks.map((t) =>
     `<tr><td>${t.pr_url ? `<a href="${esc(t.pr_url)}" target="_blank" rel="noopener">${esc(t.task_id)}</a>` : esc(t.task_id)}</td><td class="muted">${esc(t.project)}</td><td>${esc(t.state ?? "-")}</td><td>${t.attempts}</td><td>${t.tokens}</td><td>${price(t.cost_usd, t.paid_usd)}</td></tr>`).join("") +
     overhead.map((o) => `<tr class="muted"><td colspan="3">režie ${esc(o.run_id)} · ${esc(o.node)}</td><td>${o.calls}×</td><td>${o.tokens}</td><td>${price(o.cost_usd, o.paid_usd)}</td></tr>`).join("");
