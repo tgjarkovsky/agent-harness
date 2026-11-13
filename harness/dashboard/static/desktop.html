@@ -220,7 +220,7 @@
 
     <div class="col">
       <section><h2>Projekty <span class="count" id="projCount"></span><span class="spacer"></span>
-        <button class="small" data-a="scopeAll" title="Do běhu zahrnout všechny projekty">vše</button></h2>
+        <button class="small" data-a="scopeAll" id="scopeAll">vše</button></h2>
         <div id="projects"></div></section>
       <section id="detail" hidden>
         <h2 id="detailHead"></h2>
@@ -314,6 +314,9 @@ function renderRunSub() {
   const picked = new Set(pickedNames());
   const n = O.projects.filter(p => picked.has(p.name)).reduce((a, p) => a + p.counts[" "], 0);
   $("runSub").textContent = `${n} ${plural(n, "úkol", "úkoly", "úkolů")} ve frontě → implementace a PR`;
+  const all = picked.size === O.projects.length;
+  $("scopeAll").textContent = all ? "nic" : "vše";
+  $("scopeAll").title = all ? "Z běhu vyřadit všechny projekty" : "Do běhu zahrnout všechny projekty";
 }
 
 async function mergePr(button) {
@@ -896,7 +899,9 @@ document.addEventListener("click", e => {
   switch (d.a) {
     case "select": selected = selected === d.name ? null : d.name; keys.projects = ""; render(O); break;
     case "clearSel": selected = null; keys.projects = ""; render(O); break;
-    case "scopeAll": excluded.clear(); saveExcluded(); keys.projects = ""; render(O); break;
+    case "scopeAll":
+      excluded = new Set(pickedNames().length === O.projects.length ? O.projects.map(p => p.name) : []);
+      saveExcluded(); keys.projects = ""; render(O); break;
     case "filter": typeFilter = d.type; render(O); break;
     case "auto": act(paused ? "resume" : "pause"); break;
     case "planOk": act("plan", {keep: [...b.closest(".card").querySelectorAll("input:checked")].map(c => +c.value)}); break;

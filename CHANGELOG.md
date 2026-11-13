@@ -112,3 +112,4 @@
 ## [2026-11-09] - Návrhy osobních úkolů z Gmailu (IMAP, heslo aplikace) a kalendáře 2× denně se schválením v Telegramu a dashboardu, připomínky termínů dnes/zítra, „Blíží se“ v plánu dne, harness suggest
 ## [2026-11-13] - BugFinder: hlášení chyb a změn z webů přes relay, triage klientských hlášení, scout nad kódem s dotazy, malé opravy rovnou do fronty, karta Hlášení v dashboardu
 ## [2026-11-13] - Dashboard: zamítnutí návrhu dvojklikem na ❌ (potvrzení „Opravdu?“ na stejném místě), bez formuláře s důvodem
+## [2026-11-13] - Dashboard: tlačítko „vše“ u projektů přepíná na „nic“ a odškrtne všechny
