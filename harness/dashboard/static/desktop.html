@@ -529,7 +529,7 @@ function proposalItems(props) {
           <details><summary title="${esc(t.title)}">${type === "fix" && t.kind ? `<span class="tag">${esc(t.kind)}</span> ` : ""}<span class="sens">${esc(t.title)}</span></summary>${t.description ? `<p class="sens">${esc(t.description)}</p>` : ""}</details>
           <button data-a="approve" data-task="${esc(t.id)}" title="Schválit → fronta" aria-label="Schválit" ${dis()}>✅</button>
           <button data-a="edit" data-task="${esc(t.id)}" title="Upravit" aria-label="Upravit" ${dis()}>✏️</button>
-          <button data-a="reject" data-task="${esc(t.id)}" title="Zamítnout" aria-label="Zamítnout" ${dis()}>❌</button></li>`).join("")}</ul>`, group.length)];
+          <button data-a="reject" data-task="${esc(t.id)}" title="Zamítnout (klikni 2×)" aria-label="Zamítnout" ${dis()}>❌</button></li>`).join("")}</ul>`, group.length)];
   });
 }
 
@@ -687,13 +687,6 @@ function editProposal(button) {
       <button type="button" data-a="back">Zpět</button></form>`;
 }
 
-function askReason(button) {
-  // optional reason: the reflection learns from it (phase 5)
-  button.closest("li").innerHTML = `<form class="row" data-form="reject" data-task="${esc(button.dataset.task)}" style="flex:1">
-      <input type="text" name="reason" aria-label="Proč zamítnout (nepovinné)" placeholder="proč? (nepovinné)">
-      <button class="primary">Zamítnout</button><button type="button" data-a="back">Zpět</button></form>`;
-  $("inbox").querySelector("form[data-form=reject] input").focus();
-}
 
 function renderLessons(list) {
   const active = list.filter(l => l.status === "active");
@@ -915,7 +908,7 @@ document.addEventListener("click", e => {
     case "approve": act("approve", {task: d.task}); break;
     case "approveAll": approveAll(d.ids.split(",")); break;
     case "edit": editProposal(b); break;
-    case "reject": askReason(b); break;
+    case "reject": if (armed(b, "❌")) { b.disabled = true; act("reject", {task: d.task}); } break;  // 2nd click on the same spot confirms
     case "back": b.closest(".card").dataset.sig = ""; refresh(); break;  // a different sig makes the next render rebuild the card
     case "lesson": act("lesson", {project: d.project, id: d.lesson, approve: d.approve === "1"}); break;
     case "planCC": planSession(d.project); break;
@@ -940,7 +933,6 @@ document.addEventListener("submit", async e => {
   e.preventDefault();
   if (kind === "answer") act("answer", {id: f.dataset.id, text: v.text.value});
   if (kind === "reportAnswer") act("report_answer", {id: f.dataset.id, text: v.text.value});
-  else if (kind === "reject") act("reject", {task: f.dataset.task, reason: v.reason.value});
   else if (kind === "edit") act("edit", {task: f.dataset.task, title: v.title.value, description: v.description.value, done: v.done.value,
     priority: +v.priority.value, approve: e.submitter.value === "1"});
   else if (kind === "add" && await act("add", {project: f.dataset.project, title: v.title.value, description: v.description.value,
