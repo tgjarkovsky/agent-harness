@@ -160,6 +160,16 @@ def create_app(home: Path, control: serve.Ctx | None = None, prs=traces.open_prs
         ctx = SimpleNamespace(cfg=cfg, cal=None, now=datetime.now)
         return serve.agenda_data(ctx, datetime.now().date())
 
+    @app.get("/reports/{rid}/shot")
+    def report_shot(rid: str, request: Request):
+        """Screenshot of a BugFinder report; reports may come from clients, so only the local dashboard sees it."""
+        if not (request.headers.get("referer") or "http://127.0.0.1:").startswith(LOCAL_ORIGINS):
+            raise HTTPException(403, "cross-origin request")
+        r = control and next((r for r in control.state["reports"] if r["id"] == rid), None)
+        if not r or not r["shot"] or not Path(r["shot"]).exists():
+            raise HTTPException(404, "no screenshot")
+        return FileResponse(r["shot"], media_type="image/jpeg")
+
     @app.post("/control/{action}", dependencies=[Depends(require_local_origin)])
     def control_action(action: str, body: dict | None = None):
         if control is None:

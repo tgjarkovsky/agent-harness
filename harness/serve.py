@@ -3,6 +3,7 @@
 One run at a time, executed by `spawn` (a thread in production). The main loop long-polls Telegram and makes
 every decision, so the daemon state is only touched from one thread; the run thread just hands back its result."""
 import json
+import re
 import sys
 import threading
 import time as _time
@@ -12,7 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
-from . import agenda, backlog, events, gcal, lessons, suggest, traces
+from . import agenda, backlog, bugfinder, events, gcal, lessons, suggest, traces
 from .discover import LENSES, apply_merge, parse_merges, safe_title, task_lines
 from .priority import rank, rank_by_config
 from .projects import Config, Idle
@@ -28,6 +29,7 @@ MAX_PROPOSALS = 10  # discover proposes while a project has fewer [~]
 RETRY_EVERY = 24 * 3600  # one automatic discover / cleanup attempt per project and day
 CLEANUP_DAYS, CLEANUP_PRS = 14, 10  # cleanup review when the last one is older or this many PRs merged since
 CHECK_EVERY = 5 * 60  # gh is asked about PRs at most this often
+REPORT_PULL_EVERY = 120  # BugFinder relay is asked for new reports at most this often
 AUTORUN_QUOTA_CAP = 0.85  # no automatic start while the 5h or weekly window is at or above this
 TASK_USAGE = "/task <projekt> <titulek> — přidat úkol (další řádky = popis)"
 HELP = ("Příkazy:\n/todo <text> — osobní úkol (#projekt, dnes/zítra/pá/2026-11-12)\n/dnes — dnešní úkoly\n/plan — plán dne se schůzkami a návrhem bloků\n"
@@ -42,6 +44,7 @@ def default_state(now: datetime) -> dict:
             "proposals_sent": [], "lessons_sent": [], "rejected_msgs": {}, "auto_tried": {}, "next_check": 0,
             "last_scan": None, "dev": False, "todo_props": [], "todo_decided": [], "suggest_seen": [],
             "suggest_slot": None, "mail_since": None, "suggest_error": None, "reminded": {},
+            "reports": [], "reports_done": [], "reports_pulled": 0, "report_msgs": {}, "report_error": None,
             "merge_checked": {}, "merges": [], "merge_ignored": [], "last_digest": now.date().isoformat(), "digest_since": now.timestamp()}
 
 
@@ -141,6 +144,10 @@ class Ctx:
     cal: object = None  # gcal.Calendar-like: events(day), upcoming(first, days); None = no calendar
     mail: object = None  # mail.Inbox-like: new(since) -> list[Mail]; None = no e-mail
     suggest_model: Callable[[str], str] = lambda prompt: "[]"  # a tool-less model call in the real serve
+    relay: object = None  # bugfinder.Relay-like: pull(), shot(url, dest), ack(ids); None = no BugFinder
+    report_model: Callable = lambda project, instructions, shot, known: "[]"  # nodes.real.real_report in the real serve
+    pulling: bool = False  # a relay pull is in flight
+    scouting: str | None = None  # id of the report the scout works on
 
 
 def say(ctx: Ctx, text: str, buttons: Buttons | None = None) -> int | None:
@@ -363,6 +370,8 @@ def _answer(ctx: Ctx, msg: dict, text: str) -> str:
     reply_id = (msg.get("reply_to_message") or {}).get("message_id")
     if (task_id := ctx.state["rejected_msgs"].pop(str(reply_id), None)) is not None:
         return _reason(ctx, task_id, text)
+    if (rid := ctx.state["report_msgs"].get(str(reply_id))) is not None:
+        return answer_report(ctx, rid, text)
     iid = next((i for i, a in asked.items() if a["message_id"] == reply_id), None)
     if iid is None and reply_id is None:
         unanswered = [i for i, a in asked.items() if i not in answers and not a.get("answered")]
@@ -892,6 +901,160 @@ def decide_suggestion(ctx: Ctx, sid: str, accept: bool) -> str:
     return "přidáno do úkolů" if accept else "zahozeno"
 
 
+# --- BugFinder reports ------------------------------------------------------------------------------------
+
+def _report(ctx: Ctx, rid: str) -> dict | None:
+    return next((r for r in ctx.state["reports"] if r["id"] == rid), None)
+
+
+def _finish_report(ctx: Ctx, rid: str) -> None:
+    if (r := _report(ctx, rid)) and r["shot"]:
+        Path(r["shot"]).unlink(missing_ok=True)
+    ctx.state["reports"] = [r for r in ctx.state["reports"] if r["id"] != rid]
+    _remember(ctx, "reports_done", [rid], 2000)
+
+
+def _save_shot(ctx: Ctx, raw: dict) -> str | None:
+    """The screenshot on local disk (the relay deletes its copy on ack); a failed download is not fatal."""
+    if not raw.get("shot_url"):
+        return None
+    folder = ctx.backlog_path.parent / "reports"
+    folder.mkdir(exist_ok=True)
+    name = re.sub(r"[^\w-]", "", str(raw["id"]))[:64] or "shot"
+    try:
+        return str(ctx.relay.shot(raw["shot_url"], folder / f"{name}.jpg"))
+    except Exception as e:
+        print(f"bugfinder shot {raw['id']}: {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+
+
+def _maybe_pull_reports(ctx: Ctx) -> None:
+    now = ctx.now().timestamp()
+    if ctx.relay is None or ctx.pulling or now - ctx.state["reports_pulled"] < REPORT_PULL_EVERY:
+        return
+    ctx.state["reports_pulled"], ctx.pulling = now, True
+    known = {r["id"] for r in ctx.state["reports"]} | set(ctx.state["reports_done"])
+
+    def job() -> None:
+        error, ids = None, []
+        try:
+            pulled = [x for x in ctx.relay.pull() if x.get("id")]
+            new = [bugfinder.new_report(x, _save_shot(ctx, x), ctx.cfg.projects) for x in pulled if x["id"] not in known]
+            ids = [x["id"] for x in pulled]
+        except Exception as e:  # relay down, a wrong token
+            new, error = [], f"{type(e).__name__}: {str(e)[:200]}"
+        with ctx.lock:
+            ctx.state["reports"] += new
+            if error and error != ctx.state["report_error"]:
+                say(ctx, f"⚠️ BugFinder: {error}")
+            ctx.state["report_error"], ctx.pulling = error, False
+            if ctx.state_path:
+                save_state(ctx.state_path, ctx.state)
+        if ids:  # only after the state is saved: a crash in between pulls the same reports again
+            try:
+                ctx.relay.ack(ids)
+            except Exception as e:
+                print(f"bugfinder ack: {type(e).__name__}: {e}", file=sys.stderr)
+    ctx.spawn(job)
+
+
+def _maybe_scout_reports(ctx: Ctx) -> None:
+    """One scout at a time; untrusted reports wait in triage until the owner lets them through."""
+    for r in ctx.state["reports"]:
+        if r["status"] == "scouting" and r["id"] != ctx.scouting:
+            r["status"] = "queued"  # serve restarted mid-scout
+    r = next((r for r in ctx.state["reports"] if r["status"] == "queued"), None)
+    if ctx.scouting or r is None or _quota_reserved(ctx):
+        return
+    r["status"], ctx.scouting = "scouting", r["id"]
+    rid, project, known = r["id"], r["project"], _tasks(ctx)
+    instructions, shot = bugfinder.report_block(r), Path(r["shot"]) if r["shot"] else None
+
+    def job() -> None:
+        try:
+            text = ctx.report_model(project, instructions, shot, known)
+        except Exception as e:  # rate limit, a broken worktree: the owner retries with 🔁
+            text = f"scout selhal: {type(e).__name__}: {str(e)[:200]}"
+        with ctx.lock:
+            ctx.scouting = None
+            _apply_scout(ctx, rid, text)
+            if ctx.state_path:
+                save_state(ctx.state_path, ctx.state)
+    ctx.spawn(job)
+
+
+def _apply_scout(ctx: Ctx, rid: str, text: str) -> None:
+    if (r := _report(ctx, rid)) is None:
+        return  # discarded while the scout worked
+    kind, value = bugfinder.parse_result(text, r, _tasks(ctx))
+    if kind == "question":
+        r |= {"status": "question", "qa": r["qa"] + [{"q": value, "a": None}]}
+    elif kind == "reject":
+        r |= {"status": "rejected", "why": value}
+    else:
+        status = bugfinder.status_for(value)
+        backlog.edit(ctx.backlog_path,
+                     lambda t: backlog.add_new(t, [(value["id"], value["project"], task_lines(value, status))]))
+        ctx.state["proposals_sent"].append(value["id"])  # this message carries the buttons
+        where = "do fronty" if status == " " else "návrh ke schválení"
+        buttons = [[("✅ Schválit", f"ap:{value['id']}"), ("❌ Zamítnout", f"rj:{value['id']}")]] if status == "~" else None
+        say(ctx, f"🐞 [{value['project']}] → {where}: {value['title']}" + (f"\n↳ {value['why']}" if value["why"] else ""),
+            buttons)
+        _finish_report(ctx, rid)
+
+
+def _report_msg(r: dict) -> tuple[str, Buttons]:
+    head = f"[{r['project']}] {str(r['text'])[:500]}\n{r['url'] or ''}".rstrip()
+    drop = ("❌ Zahodit", f"bx:{r['id']}")
+    if r["status"] == "triage":
+        return f"🐞 Hlášení od klienta {head}", [[("✅ Zpracovat", f"ba:{r['id']}"), drop]]
+    if r["status"] == "question":
+        return f"🐞❓ {head}\n\n{r['qa'][-1]['q']}\n\nOdpověz reply na tuto zprávu.", [[drop]]
+    return f"🐞 Hlášení zamítnuto {head}\n↳ {r['why']}", [[("🔁 Znovu", f"ba:{r['id']}"), drop]]
+
+
+def _notify_reports(ctx: Ctx) -> None:
+    """Reports come from people, not autorun: they reach Telegram whatever the Dev switch says."""
+    for r in ctx.state["reports"]:
+        mark = f"{r['status']}:{len(r['qa'])}"  # a second question is a new message
+        if r["status"] not in ("triage", "question", "rejected") or r["sent"] == mark:
+            continue
+        if (mid := say(ctx, *_report_msg(r))) is None:
+            return  # Telegram down: retry next tick
+        r["sent"] = mark
+        if r["status"] == "question":
+            ctx.state["report_msgs"] = dict(list((ctx.state["report_msgs"] | {str(mid): r["id"]}).items())[-50:])
+
+
+def decide_report(ctx: Ctx, rid: str, accept: bool) -> str:
+    """✅ lets a client's report (or a rejected one, again) through to the scout; ❌ drops it."""
+    if (r := _report(ctx, rid)) is None:
+        return "už vyřízeno"
+    if not accept:
+        _finish_report(ctx, rid)
+        return "zahozeno"
+    if r["status"] not in ("triage", "rejected"):
+        return "už se zpracovává"
+    r |= {"status": "queued", "why": ""}
+    return "scout ho zpracuje"
+
+
+def answer_report(ctx: Ctx, rid: str, text: str) -> str:
+    r = _report(ctx, rid)
+    if r is None or r["status"] != "question":
+        return "Dotaz k hlášení už není otevřený."
+    if not text.strip():
+        return "Prázdná odpověď, napiš ji znovu."
+    r["qa"][-1]["a"] = text.strip()
+    r["status"] = "queued"
+    return f"👍 [{r['project']}] odpověď uložena, scout pokračuje."
+
+
+def _report_json(r: dict) -> dict:
+    return {k: r[k] for k in ("id", "project", "text", "url", "status", "why", "trusted", "created_at", "element")} \
+        | {"question": r["qa"][-1]["q"] if r["status"] == "question" else None, "shot": bool(r["shot"])}
+
+
 def _maybe_remind(ctx: Ctx) -> None:
     a, now = ctx.cfg.agenda, ctx.now()
     if a is None:
@@ -1003,6 +1166,8 @@ def _callback(ctx: Ctx, cb: dict) -> None:
         note = _decide_lesson(ctx, key, kind == "la")
     elif kind in ("sa", "sr"):
         note = decide_suggestion(ctx, key, kind == "sa")
+    elif kind in ("ba", "bx"):
+        note = decide_report(ctx, key, kind == "ba")
     elif kind == "td":
         _quiet(ctx.bot.ack, cb["id"], todo_done(ctx, key))
         return  # the /dnes list keeps its other buttons
@@ -1057,7 +1222,8 @@ def snapshot(ctx: Ctx) -> dict:
                 "questions": [q | {"answered": q["id"] in ctx.state["answers"]}
                               for q in (questions(ctx.app, config) if config else [])],
                 "plan": plans[0] if plans else None, "merges": _open_merges(ctx),
-                "lessons": [x for x in lessons.lessons(ctx.store) if x["status"] != "retired"]}
+                "lessons": [x for x in lessons.lessons(ctx.store) if x["status"] != "retired"],
+                "reports": [_report_json(r) for r in ctx.state["reports"]]}
 
 
 def _approve_plan(ctx: Ctx, keep) -> str:
@@ -1117,6 +1283,10 @@ def act(ctx: Ctx, action: str, data: dict) -> str:
             reply = decide_suggestion(ctx, str(data.get("id")), action == "suggestion_accept")
         elif action == "dev":
             reply = _dev(ctx, "on" if data.get("on") else "off")
+        elif action in ("report_accept", "report_reject"):
+            reply = decide_report(ctx, str(data.get("id")), action == "report_accept")
+        elif action == "report_answer":
+            reply = answer_report(ctx, str(data.get("id")), str(data.get("text") or ""))
         else:
             raise KeyError(action)
         if action in ("plan", "answer") and not ctx.busy:
@@ -1152,6 +1322,9 @@ def tick(ctx: Ctx, updates: list[dict]) -> None:
             _maybe_suggest(ctx)
             _notify_todo_props(ctx)
             _maybe_remind(ctx)
+        _maybe_pull_reports(ctx)
+        _maybe_scout_reports(ctx)
+        _notify_reports(ctx)
         _maybe_digest(ctx)
     finally:  # the offset too: a handled update must not be delivered again after a failure
         if ctx.state_path:

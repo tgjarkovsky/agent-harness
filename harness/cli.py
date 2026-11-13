@@ -14,11 +14,11 @@ from types import SimpleNamespace
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.store.sqlite import SqliteStore
 
-from . import agenda, backlog, events, gcal, lessons, mail, quota, serve, suggest, trace, traces
+from . import agenda, backlog, bugfinder, events, gcal, lessons, mail, quota, serve, suggest, trace, traces
 from .graph import build_graph, initial_state
 from .nodes.common import (make_approve, make_discover, make_pick_tasks, make_prioritize, make_reflect,
                            make_report)
-from .nodes.real import git, real_explore, real_merge, sh, real_nodes, real_rank, real_reflect, worktree_path
+from .nodes.real import git, real_explore, real_merge, real_report, sh, real_nodes, real_rank, real_reflect, worktree_path
 from .projects import load_config
 from .priority import config_focus, rank_by_config
 from .discover import format_plan, parse_approval
@@ -225,7 +225,8 @@ def cmd_serve(args) -> int:
                     now=datetime.now, scan=lambda: _scan_into(cfg, backlog_path), state_path=state_path,
                     store=store, live_quota=quota.fetch, merged=traces.merged_since, sh=sh,
                     merge=real_merge(cfg), cal=_calendar(cfg),
-                    mail=_inbox(cfg), suggest_model=suggest_model)
+                    mail=_inbox(cfg), suggest_model=suggest_model,
+                    relay=bugfinder.from_env(), report_model=real_report(cfg))
     web = create_app(args.home, control=ctx)
     ctx.prs = web.state.prs  # shared cache: conflict rebases and CI fixes run even with no dashboard open
     threading.Thread(target=uvicorn.run, args=(web,), kwargs={"host": "127.0.0.1", "port": args.port},
