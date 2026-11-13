@@ -119,12 +119,13 @@ def clarification_block(answers: list[str]) -> str:
 
 
 DISCOVER_WT = "_discover"
+REPORT_WT = "_report"  # BugFinder scout, apart from discover: both may run at once
 RANK_FIELDS = ("id", "project", "title", "kind", "why", "done", "source", "priority")
 
 
-def _fresh_discover_worktree(p: Project) -> Path:
+def _fresh_discover_worktree(p: Project, name: str = DISCOVER_WT) -> Path:
     """Read-only checkout of origin/<base>; reused between runs, so reset it to the latest origin every time."""
-    wt = ensure_worktree(p, DISCOVER_WT, f"harness/{DISCOVER_WT}")
+    wt = ensure_worktree(p, name, f"harness/{name}")
     git(["fetch", "-q", "origin", p.base], p.path)
     git(["reset", "-q", "--hard", f"origin/{p.base}"], wt)
     return wt
@@ -221,6 +222,23 @@ def real_explore(cfg: Config) -> Callable[[str, list[Task], str], tuple[str, dic
                       permission_mode="dontAsk", max_turns=40)
         return r.text, _agent_out("discover", r)
     return explore
+
+
+def real_report(cfg: Config) -> Callable[[str, str, Path | None, list[Task]], str]:
+    """BugFinder scout: one report against the project's code; the screenshot goes next to the checkout."""
+    def scout(name: str, instructions: str, shot: Path | None, known: list[Task]) -> str:
+        p = cfg.projects[name]
+        wt = _fresh_discover_worktree(p, REPORT_WT)
+        if shot is not None and shot.exists():
+            (wt / ".bugfinder").mkdir(exist_ok=True)
+            (wt / ".bugfinder" / shot.name).write_bytes(shot.read_bytes())
+            instructions += f"\nScreenshot of the page: .bugfinder/{shot.name} (look at it with Read)"
+        prompt = render_prompt("discover_report.md", project=name, max_diff_lines=p.max_diff_lines,
+                               verify="\n".join(f"  {c}" for c in p.verify), instructions=instructions,
+                               known="\n".join(f"  [{t.status}] {t.title}" for t in known) or "  (none)",
+                               lessons=lessons_block(name), recent=recent_block(p, wt))
+        return run_agent(prompt, cwd=wt, model="opus", tools=READ_TOOLS, permission_mode="dontAsk", max_turns=40).text
+    return scout
 
 
 def read_plan(root: Path) -> str:

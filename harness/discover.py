@@ -50,6 +50,8 @@ def proposal_id(project: str, title: str) -> str:
 
 
 def _kind(item: dict, lens: str) -> str:
+    if lens == "report":  # BugFinder: a reported bug or a change request
+        return item.get("kind") if item.get("kind") in (*FIX_KINDS, "feature") else "bug"
     if lens not in ("fix", "idle"):  # idle = the project's own scout prompt (projects.yaml), kinds as for fixes
         return {"feature": "feature", "cleanup": "refactor"}[lens]
     return item.get("kind") if item.get("kind") in FIX_KINDS else "debt"

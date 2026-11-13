@@ -72,6 +72,17 @@ Připomínky termínů (`📅`): v plánu dne sekce „⏰ Blíží se“ (`agen
 
 Autorun běží dál a dotazy k nejasným úkolům i chyby démona chodí do Telegramu vždy. Co přibylo s vypnutým Dev, se po zapnutí do Telegramu zpětně neposílá, najdeš to v dashboardu.
 
+## BugFinder: hlášení z webů
+
+Na webu projektu je ikonka 🐞 (a zkratka Ctrl+Shift+B). Hlášení chyby nebo změnového požadavku si vezme text, adresu stránky, prohlížeč, chyby z konzole, označený prvek a screenshot a pošle je do relaye na Vercelu (repo `bugfinder`, tam je i návod, jak web napojit). Serve se relaye ptá každé 2 minuty a co stáhne, to relay smaže.
+
+- Hlášení s klíčem vlastníka jde rovnou ke scoutovi. Klientské čeká v Inboxu a v Telegramu, dokud ho neschválíš (✅ Zpracovat / ❌ Zahodit). Bez schválení se na něj model nevolá.
+- Scout (Opus, jen čtení, worktree `_report` z `origin/<base>`) projde kód a vrátí jedno ze tří: úkol, dotaz, nebo zamítnutí s důvodem. Na dotaz odpovíš v dashboardu nebo reply v Telegramu a scout pokračuje. Ptát se smí dvakrát.
+- Malá jasná oprava chyby s `ACCEPT` jde rovnou do fronty `[ ]` a autorun z ní udělá draft PR. Všechno ostatní, včetně změnových požadavků, přijde jako návrh `[~]`.
+- Zamítnuté hlášení jde poslat znovu (🔁). Screenshoty leží v `reports/` a smažou se, když hlášení skončí.
+
+Nastavení: `setx HARNESS_BUGFINDER_URL "https://<relay>"` a `setx HARNESS_BUGFINDER_TOKEN "<BUGFINDER_HARNESS_TOKEN z relaye>"`, pak restart serve. Bez nich BugFinder spí.
+
 ## `harness go`
 
 Jedno kolo bez ručního psaní úkolů. Pro každý projekt souběžně běží `discover`: Opus si v čerstvém read-only worktree z `origin/<base>` projde kód, dokumentaci projektu a poznámky ze secondbrainu (Thoughts/, Inbox/) a navrhne nejvýš 5 úkolů velikosti jednoho PR. `prioritize` pak z návrhů a otevřených úkolů v BACKLOGu sestaví plán o délce `max_tasks_per_run`. Když volání selže, plán sestaví klasické pořadí podle priority.

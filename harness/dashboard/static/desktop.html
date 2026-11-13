@@ -107,6 +107,8 @@
   .filters button[aria-pressed=true] { border-color:var(--accent); color:var(--accent); }
   .card { border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--panel); display:grid; gap:8px; min-width:0; }
   .card.urgent { border-color:var(--warn); } .card.bad { border-color:var(--bad); }
+  .card .report-text { white-space:pre-wrap; overflow-wrap:anywhere; }
+  .card img.shot { max-width:100%; max-height:220px; border:1px solid var(--line); border-radius:6px; display:block; }
   .ch { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .ic { width:22px; height:22px; border-radius:50%; display:inline-grid; place-items:center; font-size:13px; font-weight:700; background:var(--line); flex:none; }
   .urgent > .ch .ic { background:var(--warn); color:var(--on-accent); } .bad > .ch .ic { background:var(--bad); color:var(--on-accent); }
@@ -488,6 +490,29 @@ function mergeItem(m) {
         <button data-a="mergeProp" data-id="${esc(m.id)}" title="Nechat návrhy zvlášť, tahle skupina se už nenabídne">Ignorovat</button></div>`);
 }
 
+// BugFinder: reports from the websites; triage, the scout's question, its rejection — the rest is a normal proposal
+const REPORT_STATE = {triage: "od klienta, čeká na ✅", queued: "čeká na scouta", scouting: "🤖 scout prochází kód…",
+                      question: "scout se ptá", rejected: "zamítnuto"};
+
+function reportItem(r) {
+  const id = `data-id="${esc(r.id)}"`, waits = ["triage", "question", "rejected"].includes(r.status);
+  const el = r.element ? `<div class="muted sens">Prvek: <code>${esc(r.element.selector)}</code> ${esc(r.element.text || "")}</div>` : "";
+  const body = r.status === "question"
+    ? `<div class="sens"><b>${esc(r.question)}</b></div><form class="row" data-form="reportAnswer" ${id}>
+        <input type="text" name="text" aria-label="Odpověď scoutovi" required><button class="primary">Odeslat</button>
+        <button type="button" data-a="report" ${id}>Zahodit</button></form>`
+    : r.status === "triage" || r.status === "rejected"
+    ? `${r.why ? `<div class="muted sens">↳ ${esc(r.why)}</div>` : ""}<div class="row">
+        <button class="primary" data-a="report" data-accept="1" ${id}>${r.status === "triage" ? "Zpracovat" : "Zkusit znovu"}</button>
+        <button data-a="report" ${id}>Zahodit</button></div>` : "";
+  return item(waits ? 1.5 : 7, "decide", r.project, `r:${r.id}`, r, waits ? "urgent" : "",
+    head("🐞", r.project, `<b>Hlášení</b>`, `<span class="muted">${REPORT_STATE[r.status] || r.status}</span>`)
+    + `<div class="sens report-text">${esc(r.text)}</div>
+      ${r.url ? `<a class="muted sens t" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>` : ""}${el}
+      ${r.shot ? `<a href="/reports/${encodeURIComponent(r.id)}/shot" target="_blank"><img class="shot sens" alt="Screenshot" loading="lazy" src="/reports/${encodeURIComponent(r.id)}/shot"></a>` : ""}
+      ${body}`, waits ? 1 : 0);
+}
+
 // proposals split by type across projects; anything that is not a feature or a refactor is a fix
 const propType = t => t.kind === "feature" || t.kind === "refactor" ? t.kind : "fix";
 const PROP_TYPES = [["feature", "Nové features", "＋"], ["fix", "Bugy a opravy", "🔧"], ["refactor", "Úklid kódu", "🧹"]];
@@ -525,6 +550,7 @@ function inboxItems(o, only = null) {  // `only`: a project the proposals are na
     else if (pr.ci === "ok" && !pr.isDraft && pr.mergeable !== "CONFLICTING") items.push(readyItem(p.name, pr));
   }
   if (s) for (const m of s.merges) items.push(mergeItem(m));
+  if (s) for (const r of s.reports || []) items.push(reportItem(r));
   if (!devOn) return items.sort((a, b) => a.rank - b.rank || a.project.localeCompare(b.project));  // proposals and lessons wait
   items.push(...proposalItems(o.proposals.filter(t => !only || t.project === only)));
   const proposed = (s ? s.lessons : []).filter(l => l.status === "proposed");
@@ -895,6 +921,7 @@ document.addEventListener("click", e => {
     case "planCC": planSession(d.project); break;
     case "dev": act("dev", {on: !devOn}); break;
     case "todoDone": b.disabled = true; agendaAct("todo_done", {key: d.key}); break;
+    case "report": b.disabled = true; act(d.accept ? "report_accept" : "report_reject", {id: d.id}); break;
     case "suggestion": b.disabled = true; agendaAct(d.accept ? "suggestion_accept" : "suggestion_reject", {id: d.id}); break;
   }
 });
@@ -912,6 +939,7 @@ document.addEventListener("submit", async e => {
   if (!kind) return;
   e.preventDefault();
   if (kind === "answer") act("answer", {id: f.dataset.id, text: v.text.value});
+  if (kind === "reportAnswer") act("report_answer", {id: f.dataset.id, text: v.text.value});
   else if (kind === "reject") act("reject", {task: f.dataset.task, reason: v.reason.value});
   else if (kind === "edit") act("edit", {task: f.dataset.task, title: v.title.value, description: v.description.value, done: v.done.value,
     priority: +v.priority.value, approve: e.submitter.value === "1"});
