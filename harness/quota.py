@@ -11,6 +11,7 @@ from pathlib import Path
 
 URL = "https://api.anthropic.com/api/oauth/usage"
 CREDENTIALS = Path.home() / ".claude" / ".credentials.json"
+KEYCHAIN_SERVICE = "Claude Code-credentials"  # macOS: Claude Code keeps the same JSON in the login keychain
 TTL = 60
 WINDOWS = ("five_hour", "seven_day")
 
@@ -18,9 +19,23 @@ _lock = threading.Lock()
 _cache: dict = {"at": 0.0, "value": None}
 
 
-def _token(now: float) -> str | None:
+def _credentials() -> str:
     try:
-        oauth = json.loads(CREDENTIALS.read_text(encoding="utf-8"))["claudeAiOauth"]
+        return CREDENTIALS.read_text(encoding="utf-8")
+    except OSError:
+        if sys.platform != "darwin":
+            raise
+    import subprocess
+    r = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"],
+                       capture_output=True, text=True, timeout=10)
+    if r.returncode:
+        raise OSError(r.stderr.strip())
+    return r.stdout
+
+
+def _token(now: float, read=_credentials) -> str | None:
+    try:
+        oauth = json.loads(read())["claudeAiOauth"]
     except (OSError, ValueError, KeyError):
         return None
     return oauth.get("accessToken") if oauth.get("expiresAt", 0) / 1000 > now else None

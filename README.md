@@ -13,6 +13,21 @@ Správa mojí práce (kalendář, úkoly, plán dne) a pod ní LangGraph orchest
     .venv/Scripts/harness scan [--write]     # TODO/FIXME z origin/<base> → návrhy [~] v BACKLOGu
     .venv/Scripts/harness lessons [--project X] [--retire PROJECT/ID]   # lekce z reflexe (fáze 5)
 
+### macOS / další stroj
+
+Na macu se běží ručně (`dashboard`, `go`, `run`), `serve` jen na jednom stroji. Python ≥ 3.11 (systémový `python3` je 3.9):
+
+    brew install python && python3.15 -m venv .venv && .venv/bin/python -m pip install -e ".[dev]"
+    claude login   # subscription; token je v Klíčence, odtud ho čte i kvóta
+
+Místo `.venv/Scripts/harness` se volá `.venv/bin/harness`. Co se na stroji liší (cesty k venvům, chybějící projekty), patří do `projects.local.yaml` vedle `projects.yaml`. Soubor není v gitu, klíče projektu přepisuje jednotlivě a `projekt: null` projekt vypne:
+
+```yaml
+projects:
+  kytky: null
+  harness: {verify: ['../_hvenv/bin/python -m pytest -q']}
+```
+
 Fáze 2: `run` zpracovává až `max_parallel` úkolů z různých projektů najednou (LangGraph `Send` → worker subgraf). Návrh `[~]` se nespustí, dokud ho ručně nezměníš na `[ ]`. Běhy z fáze 1 nejdou resumovat novým grafem.
 
 Fáze 3: když plánovač označí úkol za nejasný, worker se zeptá (uzel `clarify`, LangGraph `interrupt`) a běh skončí ve stavu `waiting`. Na dotaz se odpovídá v terminálu (`run` / `simulate`), v dashboardu nebo z Telegramu. Po 2 kolech dotazů nebo po přeskočení se úkol zapíše jako `[?]`. Zamítnutý návrh má stav `[-]`.

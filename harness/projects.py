@@ -10,6 +10,7 @@ REQUIRED = ("path", "base", "verify")
 TIME_RE = re.compile(r"^\s*(\d{1,2}):(\d{2})\s*$")
 EVERY_RE = re.compile(r"^\s*(\d+)\s*([mhd])\s*$")
 UNIT = {"m": 60, "h": 3600, "d": 86400}
+LOCAL_FILE = "projects.local.yaml"  # per-machine overrides next to projects.yaml, not in git
 PLAN_FILE = "ROADMAP.md"  # the project's mid-term product plan in its repo root; the feature scout follows it
 
 
@@ -72,6 +73,9 @@ class Config:
 def load_config(path: Path) -> Config:
     path = Path(path)
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    local = path.with_name(LOCAL_FILE)
+    if local.exists():
+        raw = merge_local(raw, yaml.safe_load(local.read_text(encoding="utf-8")) or {})
     billing = raw.get("billing", "subscription")
     if billing not in ("subscription", "api"):
         raise ValueError(f"billing must be subscription|api, got {billing!r}")
@@ -88,6 +92,19 @@ def load_config(path: Path) -> Config:
     return Config(billing, raw.get("max_tasks_per_run", 3), raw.get("quota_threshold", 0.7), projects,
                   max_parallel, secondbrain, _serve(raw.get("serve") or {}), raw.get("plan_model", "opus"),
                   _agenda(raw["agenda"], path.parent) if raw.get("agenda") else None)
+
+
+def merge_local(raw: dict, local: dict) -> dict:
+    """Overlay projects.local.yaml: top-level keys replace, a project's keys replace one by one, `name: null` drops it."""
+    out = {**raw, **{k: v for k, v in local.items() if k != "projects"}}
+    projects = dict(raw.get("projects") or {})
+    for name, spec in (local.get("projects") or {}).items():
+        if spec is None:
+            projects.pop(name, None)
+        else:
+            projects[name] = {**(projects.get(name) or {}), **spec}
+    out["projects"] = projects
+    return out
 
 
 def _time(text: str, key: str = "serve.digest_at") -> time:

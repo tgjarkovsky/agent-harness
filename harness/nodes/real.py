@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import signal
 import subprocess
 import tempfile
 from pathlib import Path
@@ -17,16 +18,19 @@ WEB_TOOLS = ["WebSearch", "WebFetch"]
 
 
 def _kill_tree(proc: subprocess.Popen) -> None:
-    # subprocess timeout kills only cmd.exe; grandchildren (node/vitest) keep the pipes open forever
+    # subprocess timeout kills only the shell; grandchildren (node/vitest) keep the pipes open forever
     if os.name == "nt":
         subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
     else:
-        proc.kill()
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)  # sh() starts the shell as a session leader: pgid == pid
+        except ProcessLookupError:
+            pass
 
 
 def sh(cmd: str, cwd, timeout: int = 900) -> tuple[bool, str]:
     proc = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True, encoding="utf-8", errors="replace")
+                            text=True, encoding="utf-8", errors="replace", start_new_session=os.name != "nt")
     try:
         out, _ = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:

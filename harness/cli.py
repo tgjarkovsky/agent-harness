@@ -194,6 +194,8 @@ def _scan_into(cfg, backlog_path: Path, names=None, limit=5) -> int:
 
 def hide_child_consoles() -> None:
     """Without a console every git/gh child would flash its own window; default them to CREATE_NO_WINDOW."""
+    if os.name != "nt":  # no console windows outside Windows
+        return
     init = subprocess.Popen.__init__
 
     def no_window(self, *a, creationflags=0, **kw):
