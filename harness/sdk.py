@@ -46,7 +46,7 @@ def _no_publish_env() -> dict[str, str]:
     # ponytail: blocks origin + stored credentials; a push via ssh key to an explicit URL still works — sandbox in a later phase
     return {
         "GIT_CONFIG_COUNT": "2",
-        "GIT_CONFIG_KEY_0": "remote.origin.pushurl", "GIT_CONFIG_VALUE_0": "harness-push-disabled:",
+        "GIT_CONFIG_KEY_0": "remote.origin.pushurl", "GIT_CONFIG_VALUE_0": "file:///harness-push-disabled",  # fails at once; "x:" goes to ssh on POSIX
         "GIT_CONFIG_KEY_1": "credential.helper", "GIT_CONFIG_VALUE_1": "",
         "GIT_TERMINAL_PROMPT": "0",
         "GH_TOKEN": "",

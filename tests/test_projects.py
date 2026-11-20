@@ -127,3 +127,15 @@ def test_idle_cmd_or_prompt_with_interval(tmp_path):
 def test_bad_idle_raises(tmp_path, idle, error):
     with pytest.raises(ValueError, match=error):
         load_config(write(tmp_path, f"projects:\n  a: {{path: a, base: main, verify: [x], idle: {idle}}}\n"))
+
+
+def test_local_file_overrides_per_machine(tmp_path):
+    write(tmp_path, "max_parallel: 2\nprojects:\n"
+                    "  a: {path: a, base: main, setup: [win], verify: [win-test]}\n"
+                    "  b: {path: b, base: main, verify: [x]}\n")
+    (tmp_path / "projects.local.yaml").write_text("max_parallel: 1\nprojects:\n"
+                                                  "  a: {verify: [mac-test]}\n  b: null\n", encoding="utf-8")
+    cfg = load_config(tmp_path / "projects.yaml")
+    assert cfg.max_parallel == 1
+    assert list(cfg.projects) == ["a"]
+    assert cfg.projects["a"].verify == ("mac-test",) and cfg.projects["a"].setup == ("win",)

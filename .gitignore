@@ -11,3 +11,4 @@ serve.log
 docs/video/*.mp4
 docs/video/still-*.png
 reports/
+projects.local.yaml

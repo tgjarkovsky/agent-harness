@@ -4,6 +4,8 @@ import subprocess
 import time
 from pathlib import Path
 
+import pytest
+
 from harness import cli
 from harness.backlog import parse, set_status
 from harness.nodes import real
@@ -15,7 +17,8 @@ from tests.test_real_git import make_repo, project
 
 def test_sh_timeout_kills_grandchildren():
     start = time.time()
-    ok, _ = sh("ping -n 15 127.0.0.1 > nul", Path.cwd(), timeout=2)
+    sleep = "ping -n 15 127.0.0.1 > nul" if os.name == "nt" else "sleep 15 | cat"
+    ok, _ = sh(sleep, Path.cwd(), timeout=2)
     assert not ok
     assert time.time() - start < 8
 
@@ -87,6 +90,7 @@ def test_worker_cannot_push_or_use_gh(tmp_path):
     assert env["GH_TOKEN"] == "" and Path(env["GH_CONFIG_DIR"]).is_dir()
 
 
+@pytest.mark.skipif(os.name != "nt", reason="CREATE_NO_WINDOW exists only on Windows")
 def test_hide_child_consoles_adds_no_window_flag(monkeypatch):
     seen = []
     orig = subprocess.Popen.__init__

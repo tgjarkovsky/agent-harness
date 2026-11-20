@@ -45,3 +45,16 @@ def test_endpoint_failure_returns_none_and_is_cached():
         raise OSError("boom")
     assert quota.fetch(now=lambda: 1000, get=get) is None
     assert quota.fetch(now=lambda: 1001, get=get) is None and len(calls) == 1
+
+
+def test_macos_falls_back_to_keychain(monkeypatch):
+    import subprocess
+    oauth = json.dumps({"claudeAiOauth": {"accessToken": "kc", "expiresAt": 2_000_000 * 1000}})
+    seen = []
+    monkeypatch.setattr(quota.sys, "platform", "darwin")
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: seen.append(cmd) or
+                        subprocess.CompletedProcess(cmd, 0, oauth, ""))
+    assert quota._token(1000) == "kc"
+    assert seen[0][:2] == ["security", "find-generic-password"]
+    monkeypatch.setattr(quota.sys, "platform", "win32")
+    assert quota._token(1000) is None  # elsewhere only the credentials file counts

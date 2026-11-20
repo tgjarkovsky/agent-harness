@@ -1,8 +1,11 @@
 import subprocess
+import sys
 from pathlib import Path
 
 from harness.nodes.real import commit_if_dirty, ensure_worktree, git, numstat_lines, worktree_path
 from harness.projects import Project
+
+PASS = f'"{sys.executable}" -c pass'  # a bare `python` is missing on macOS
 
 
 def make_repo(tmp_path: Path) -> Path:
@@ -22,7 +25,7 @@ def make_repo(tmp_path: Path) -> Path:
 
 
 def project(repo: Path) -> Project:
-    return Project("demo", repo, "main", (), ("python -c pass",), (), 3, 800)
+    return Project("demo", repo, "main", (), (PASS,), (), 3, 800)
 
 
 def test_worktree_created_from_origin_and_reused(tmp_path):
@@ -156,7 +159,7 @@ def test_merge_pr_leaves_other_conflicts_alone(tmp_path, monkeypatch):
     assert len(git(["worktree", "list"], repo).splitlines()) == 1
 
 
-def _resolver(tmp_path, monkeypatch, write: str | None, verify: str = "python -c pass"):
+def _resolver(tmp_path, monkeypatch, write: str | None, verify: str = PASS):
     """Content conflict in a.txt; the fake agent writes `write` into a.txt (None = leaves the markers)."""
     from harness.nodes import real
     from harness.sdk import WorkerResult
@@ -223,13 +226,13 @@ def test_agent_resolver_pushes_clean_merge(tmp_path, monkeypatch):
         raise AssertionError("agent se nemá volat")
     monkeypatch.setattr(real, "run_agent", agent)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    p = Project("demo", repo, "main", (), ("python -c pass",), (), 3, 800)
+    p = Project("demo", repo, "main", (), (PASS,), (), 3, 800)
     assert real.resolve_conflict_with_agent(p, "harness/t-1", "subscription")
     git(["fetch", "-q", "origin"], repo)
     git(["merge-base", "--is-ancestor", "origin/main", "origin/harness/t-1"], repo)
 
 
-def _ci_fixer(tmp_path, monkeypatch, write: bool, verify: str = "python -c pass"):
+def _ci_fixer(tmp_path, monkeypatch, write: bool, verify: str = PASS):
     from harness import traces
     from harness.nodes import real
     from harness.sdk import WorkerResult
@@ -262,7 +265,7 @@ def test_ci_fix_without_change_or_with_failing_verify_pushes_nothing(tmp_path, m
     import pytest
 
     from harness.nodes.real import fix_ci_with_agent
-    for sub, write, verify, error in (("idle", False, "python -c pass", "nic nezměnil"), ("verify", True, "exit 1", "exit 1")):
+    for sub, write, verify, error in (("idle", False, PASS, "nic nezměnil"), ("verify", True, "exit 1", "exit 1")):
         repo, p, _ = _ci_fixer(tmp_path / sub, monkeypatch, write, verify)
         before = git(["ls-remote", "origin", "harness/t-1"], repo)
         with pytest.raises(RuntimeError, match=error):
