@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.store.sqlite import SqliteStore
 
-from . import agenda, backlog, bugfinder, events, gcal, lessons, mail, quota, serve, suggest, trace, traces
+from . import agenda, backlog, bugfinder, events, gcal, lessons, mail, quota, serve, state, suggest, trace, traces
 from .graph import build_graph, initial_state
 from .nodes.common import (make_approve, make_discover, make_pick_tasks, make_prioritize, make_reflect,
                            make_report)
@@ -98,7 +98,7 @@ def cmd_simulate(args) -> int:
 
 
 def _real_app(home: Path, cfg):
-    backlog_path = home / "BACKLOG.md"
+    backlog_path = state.backlog_path(home)
     conn, saver = open_db(home)
     store = open_store(home)
     trace.set_sink(lambda call, steps: traces.record(conn, call, steps))
@@ -309,7 +309,7 @@ def cmd_lessons(args) -> int:
 
 def cmd_prune(args) -> int:
     cfg = load_config(args.home / "projects.yaml")
-    done = {t.id for t in backlog.parse(backlog.read(args.home / "BACKLOG.md")) if t.status == "x"}
+    done = {t.id for t in backlog.parse(backlog.read(state.backlog_path(args.home))) if t.status == "x"}
     for project in cfg.projects.values():
         for task_id in done:
             path = worktree_path(project, task_id)
@@ -320,7 +320,7 @@ def cmd_prune(args) -> int:
 
 
 def _read_backlog(home: Path) -> str:
-    return backlog.read(home / "BACKLOG.md")
+    return backlog.read(state.backlog_path(home))
 
 
 def cmd_queue(args) -> int:
@@ -341,7 +341,7 @@ def cmd_scan(args) -> int:
     if unknown := [n for n in names if n not in cfg.projects]:
         print(f"unknown project: {', '.join(unknown)}", file=sys.stderr)
         return 2
-    props = _scan_props(cfg, args.home / "BACKLOG.md", names, args.limit, write=bool(args.write))
+    props = _scan_props(cfg, state.backlog_path(args.home), names, args.limit, write=bool(args.write))
     for name in names:
         mine = [p for p in props if p.project == name]
         for p in mine:
@@ -350,6 +350,24 @@ def cmd_scan(args) -> int:
             print(f"{name}: no new proposals")
     if args.write and props:
         print(f"{len(props)} proposal(s) written as [~]; change to [ ] to approve")
+    return 0
+
+
+def cmd_state(args) -> int:
+    """BACKLOG.md and lessons shared between machines via the git branch harness-state (see state.py)."""
+    store = open_store(args.home)
+    try:
+        if args.action == "init":
+            print(state.init(args.home, store, create=args.create))
+        elif args.action == "sync":
+            print(state.sync(args.home, store, state._host()))
+        else:
+            d = state.state_dir(args.home)
+            print(f"{d}: {'synchronizovaný stav' if state.enabled(args.home) else 'není (harness state init)'}")
+            print(f"backlog: {state.backlog_path(args.home)}")
+    except state.StateError as e:
+        print(f"state: {e}", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -391,11 +409,17 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--write", action="store_true")
     sc.add_argument("--project")
     sc.add_argument("--limit", type=int, default=5)
+    st = sub.add_parser("state")
+    st.add_argument("action", choices=["init", "sync", "status"])
+    st.add_argument("--create", action="store_true", help="založit stav z BACKLOG.md a lekcí tohoto stroje")
     args = p.parse_args(argv)
     handlers = {"simulate": cmd_simulate, "run": cmd_run, "dashboard": cmd_dashboard, "prune": cmd_prune,
                 "queue": cmd_queue, "scan": cmd_scan, "serve": cmd_serve, "go": cmd_go, "stats": cmd_stats,
-                "lessons": cmd_lessons, "today": cmd_today, "suggest": cmd_suggest}
-    return handlers[args.cmd](args)
+                "lessons": cmd_lessons, "today": cmd_today, "suggest": cmd_suggest, "state": cmd_state}
+    if args.cmd in ("simulate", "state") or not state.enabled(args.home):
+        return handlers[args.cmd](args)
+    with state.session(args.home, open_store(args.home)):  # pull first, push while running and at the end
+        return handlers[args.cmd](args)
 
 
 if __name__ == "__main__":

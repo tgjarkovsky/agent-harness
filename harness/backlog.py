@@ -7,6 +7,7 @@ from typing import Callable, TypeVar
 
 T = TypeVar("T")
 LOCK = threading.Lock()  # serve, dashboard and graph nodes edit BACKLOG.md from different threads
+ON_CHANGE: list[Callable[[], None]] = []  # called after every write (state sync schedules a push)
 
 HEADER_RE = re.compile(r"^## (?P<project>\S+)\s*$")
 # id becomes a git branch name and CLI argument → restrict to safe characters; task_id() is the only creator
@@ -133,6 +134,8 @@ def edit_with(path: Path, fn: Callable[[str], tuple[str, T]]) -> T:
     with LOCK:
         new, result = fn(read(path))
         path.write_bytes(new.encode("utf-8"))
+        for fn_changed in list(ON_CHANGE):
+            fn_changed()
         return result
 
 
