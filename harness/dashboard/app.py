@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from .. import agenda, backlog, events, quota, serve, traces
+from .. import agenda, backlog, events, quota, serve, state, traces
 from ..graph import graph_mermaid, worker_mermaid
 from ..nodes.real import fix_ci_with_agent, read_plan, resolve_conflict_with_agent
 from ..priority import config_focus, rank
@@ -129,7 +129,7 @@ def create_app(home: Path, control: serve.Ctx | None = None, prs=traces.open_prs
     @app.get("/overview")
     def overview():
         cfg = load_config(home / "projects.yaml")  # every request: new projects show up without a restart
-        path = home / "BACKLOG.md"
+        path = state.backlog_path(home)
         tasks = backlog.parse(backlog.read(path))
         last = events.last_cleanups(conn)
         paths = [p.path for p in cfg.projects.values()]
@@ -260,13 +260,13 @@ def create_app(home: Path, control: serve.Ctx | None = None, prs=traces.open_prs
 
     @app.get("/backlog")
     def get_backlog(sim: str | None = None):
-        path = sims[sim].backlog_path if sim in sims else home / "BACKLOG.md"
+        path = sims[sim].backlog_path if sim in sims else state.backlog_path(home)
         return [asdict(t) for t in backlog.parse(backlog.read(path))]
 
     @app.get("/history")
     def get_history(day: str):
         try:
-            text = serve.history(conn, day, backlog.read(home / "BACKLOG.md"))
+            text = serve.history(conn, day, backlog.read(state.backlog_path(home)))
         except ValueError:
             raise HTTPException(400, f"day must be YYYY-MM-DD, got {day!r}") from None
         return {"day": day, "text": text}

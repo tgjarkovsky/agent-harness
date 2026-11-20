@@ -15,10 +15,10 @@ Správa mojí práce (kalendář, úkoly, plán dne) a pod ní LangGraph orchest
 
 ### macOS / další stroj
 
-Na macu se běží ručně (`dashboard`, `go`, `run`), `serve` jen na jednom stroji. Python ≥ 3.11 (systémový `python3` je 3.9):
+Python ≥ 3.11 (systémový `python3` je 3.9):
 
     brew install python && python3.15 -m venv .venv && .venv/bin/python -m pip install -e ".[dev]"
-    claude login   # subscription; token je v Klíčence, odtud ho čte i kvóta
+    claude auth login   # subscription; token je v Klíčence, odtud ho čte i kvóta
 
 Místo `.venv/Scripts/harness` se volá `.venv/bin/harness`. Co se na stroji liší (cesty k venvům, chybějící projekty), patří do `projects.local.yaml` vedle `projects.yaml`. Soubor není v gitu, klíče projektu přepisuje jednotlivě a `projekt: null` projekt vypne:
 
@@ -27,6 +27,20 @@ projects:
   kytky: null
   harness: {verify: ['../_hvenv/bin/python -m pytest -q']}
 ```
+
+### Sdílený stav mezi stroji
+
+`BACKLOG.md` a lekce (včetně zpracované zpětné vazby) žijí ve větvi `harness-state`, naklonované do `state/` (v gitignore). Historie běhů, kroky agentů, ceny a checkpointy zůstávají v `harness.db` každého stroje.
+
+- Každý příkaz (`run`, `go`, `queue`, `dashboard`, `serve`…) před startem stáhne stav, během běhu ho každou minutu a 5 s po úpravě backlogu synchronizuje a na konci odešle.
+- Slučuje se po úkolech: změna na jedné straně vyhraje nad nezměněnou, když oba stroje změní stejný úkol, vyhraje ten, kdo synchronizuje později, úprava vyhraje nad smazáním. Lekce jdou jen dopředu (navržená → platí → vyřazená).
+- Bez sítě se pracuje dál a odešle se při další synchronizaci. Ručně: `harness state sync`, stav: `harness state status`.
+
+Založení (jednou, na stroji s živým `BACKLOG.md`, se zastaveným `serve`):
+
+    harness state init --create   # větev z tohoto BACKLOG.md a lekcí z harness.db, push na origin
+
+Na ostatních strojích `harness state init` větev jen stáhne a lekce z ní naimportuje. Bez větve na origin odmítne pokračovat, aby starý backlog nepřepsal živý.
 
 Fáze 2: `run` zpracovává až `max_parallel` úkolů z různých projektů najednou (LangGraph `Send` → worker subgraf). Návrh `[~]` se nespustí, dokud ho ručně nezměníš na `[ ]`. Běhy z fáze 1 nejdou resumovat novým grafem.
 

@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from .. import backlog, serve, traces
+from .. import backlog, serve, state, traces
 from ..projects import load_config
 
 PR_CACHE_SECONDS = 300
@@ -101,7 +101,7 @@ def make_pr_care(home: Path, control: serve.Ctx | None, prs, merged, resolve, fi
     def reimplement(path: Path, pr: dict) -> str:
         """Close the PR and put its task back to [ ] for a fresh run on the current base."""
         task_id = pr["headRefName"].removeprefix("harness/")
-        bl = home / "BACKLOG.md"
+        bl = state.backlog_path(home)
         if task_id not in {t.id for t in backlog.parse(backlog.read(bl))}:
             raise ValueError(f"úkol {task_id} není v BACKLOG.md")
         requeue(path, pr["number"], pr["headRefName"])

@@ -114,3 +114,4 @@
 ## [2026-11-13] - Dashboard: zamítnutí návrhu dvojklikem na ❌ (potvrzení „Opravdu?“ na stejném místě), bez formuláře s důvodem
 ## [2026-11-13] - Dashboard: tlačítko „vše“ u projektů přepíná na „nic“ a odškrtne všechny
 ## [2026-11-20] - macOS: projects.local.yaml (přepisy pro jeden stroj mimo git), timeout v sh() zabije celou skupinu procesů, CREATE_NO_WINDOW jen na Windows, kvóta čte token z Klíčenky, zákaz push workerů přes file:// (na POSIX šel přes ssh a visel), testy bez Windows příkazů
+## [2026-11-20] - Sdílený stav mezi stroji: BACKLOG.md a lekce ve větvi harness-state (state/), harness state init/sync/status, synchronizace před příkazem, během něj a na konci, merge po úkolech a lekcích (git merge drivery)
