@@ -26,8 +26,13 @@ def _proposal(project: str, path: str, line: int, text: str) -> Proposal | None:
     m = MARKER_RE.search(text)
     if not m:
         return None
+    before, body = text[:m.start()], m[2].strip()
+    if before.count('"') % 2 or before.count("'") % 2:  # marker inside a string literal
+        return None
+    if not body or body.endswith("\\"):  # empty or cut-off text
+        return None
     # id ignores the line number so a proposal survives code moving around it
-    title = f"{m[1]}: {m[2].strip()}" if m[2].strip() else f"{m[1]} v {path}"
+    title = f"{m[1]}: {body}"
     return Proposal(backlog.task_id(project, "todo", f"{path}\0{text.strip()}"), project, path, line, safe_title(title)[:100])
 
 
@@ -36,7 +41,8 @@ def scan_project(project: Project) -> list[Proposal]:
     ref = f"origin/{project.base}"
     git(["fetch", "-q", "origin", project.base], project.path)
     # markdown excluded: plans/specs/notes quote TODOs as prose, not as work left in code
-    out = subprocess.run(["git", "grep", "-n", "-I", "-w", "-E", "TODO|FIXME", ref, "--", ".", ":!*.md"], cwd=project.path,
+    out = subprocess.run(["git", "grep", "-n", "-I", "-w", "-E", "TODO|FIXME", ref, "--", ".", ":!*.md",
+                          ":(exclude,glob)**/tests/**", ":(exclude,glob)**/test/**"], cwd=project.path,
                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     if out.returncode not in (0, 1):  # 1 = no match
         raise RuntimeError(f"git grep failed in {project.name}: {out.stderr.strip()}")
