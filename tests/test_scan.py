@@ -120,3 +120,11 @@ def test_daemon_scan_duplicate_marker_parses(tmp_path):
     backlog_path.write_bytes(b"## demo\n")
     assert _scan_into(cfg, backlog_path) == 1
     assert len(parse(backlog_path.read_bytes().decode("utf-8"))) == 1
+
+
+def test_scan_skips_tests_dirs_string_literals_and_empty_text(tmp_path):
+    repo = make_repo(tmp_path)
+    commit_files(repo, {"tests/test_x.py": "# TODO: a\n", "pkg/tests/y.py": "# TODO: a\n",
+                        "s.py": 'w("# TODO: \n\n- [ ] A\n")\nx = \'// FIXME: z\'\n# TODO\n',
+                        "ok.py": "# TODO: platné\n"})
+    assert [(p.path, p.title) for p in scan_project(project(repo))] == [("ok.py", "TODO: platné")]
