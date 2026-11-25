@@ -4,6 +4,7 @@ Feedback is derived from BACKLOG.md (rejected / failed / unclear tasks) and from
 Store remembers which feedback a reflection already consumed. A lesson starts `proposed` and reaches prompts
 only after the owner approves it (`active`); rejected or retired lessons keep their key so they never return."""
 import hashlib
+import re
 import time
 from collections import Counter
 from typing import Callable
@@ -20,6 +21,7 @@ ALL = "*"  # lessons for every project
 HARNESS = "harness"
 MAX_ACTIVE = 15
 MAX_TEXT = 300
+SKILL_NAME = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 FEEDBACK_KIND = {"-": "rejected", "!": "failure", "?": "unclear"}
 STATUS_WORD = {"x": "hotovo", "-": "zamítnuto", "!": "selhalo", "?": "nejasné", "~": "čeká", " ": "ve frontě"}
 
@@ -95,7 +97,8 @@ def gather_feedback(text: str, seen: set[str], pr_info: Callable[[str], tuple[st
                 continue
             state, comments = info
             if state == "merged" and not comments:
-                quiet.append(key)
+                items.append({"key": key, "project": t.project, "task": t.id, "kind": "merged",
+                              "text": f"{t.title} — PR merged\n{t.description}".strip()})
                 continue
             items.append({"key": key, "project": t.project, "task": t.id,
                           "kind": "closed" if state == "closed" else "review",
@@ -111,13 +114,18 @@ def parse_reflection(text: str, items: list[dict]) -> list[dict]:
         if not isinstance(x, dict):
             continue
         body, scope = " ".join(str(x.get("text") or "").split())[:MAX_TEXT], x.get("scope", "project")
-        project = x.get("project") if scope == "project" else HARNESS
+        project = HARNESS if scope == "prompt" else x.get("project")
         if not isinstance(scope, str) or not isinstance(project, str):
             continue
-        if not body or scope not in ("project", "prompt") or project not in projects | {HARNESS}:
+        if not body or scope not in ("project", "prompt", "skill") or project not in projects | {HARNESS}:
+            continue
+        name = x.get("name")
+        if scope == "skill" and (project == ALL or not isinstance(name, str)
+                                  or len(name) > 40 or not SKILL_NAME.fullmatch(name)):
             continue
         out.append({"project": project, "scope": scope, "text": body,
-                    "title": " ".join(str(x.get("title") or body).split())[:80],
+                    "title": f"Skill {name}" if scope == "skill" else " ".join(str(x.get("title") or body).split())[:80],
+                    "name": name if scope == "skill" else "",
                     "source": [k for k in _as_list(x.get("source")) if isinstance(k, str) and k in keys]})
     return out
 
@@ -133,6 +141,18 @@ def harness_task(item: dict) -> tuple[str, list[str]]:
     pid = proposal_id(HARNESS, title)
     p = {"id": pid, "title": title, "description": f"{item['text']}\nZdroj: {', '.join(item['source']) or '-'}",
          "done": "Změna v promptech nebo kódu harnessu (ne guard/sdk/quota/projects.yaml), pytest zelený."}
+    return pid, task_lines(p, "~")
+
+
+def skill_task(item: dict) -> tuple[str, list[str]]:
+    """A project skill from a merged PR as a [~] proposal in the project's BACKLOG section."""
+    title = safe_title(item["title"])
+    pid = proposal_id(item["project"], title)
+    path = f".claude/skills/{item['name']}/SKILL.md"
+    p = {"id": pid, "title": title,
+         "description": f"{item['text']}\nZapiš ho jako {path} (frontmatter name + description).\n"
+                        f"Zdroj: {', '.join(item['source']) or '-'}",
+         "done": f"Soubor {path} existuje a verify projektu projde."}
     return pid, task_lines(p, "~")
 
 

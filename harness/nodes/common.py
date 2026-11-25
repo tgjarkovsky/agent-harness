@@ -159,6 +159,9 @@ def make_reflect(backlog_path: Path, reflect_fn: Callable[[list[dict], list[dict
                 lessons.propose(store, f["project"], f["text"], f["source"])
         if prompts := [lessons.harness_task(f) for f in found if f["scope"] == "prompt"]:
             edit_backlog(backlog_path, lambda t: backlog.add_new(t, [(pid, lessons.HARNESS, lines) for pid, lines in prompts]))
+        skills = [(f["project"], *lessons.skill_task(f)) for f in found if f["scope"] == "skill"]
+        if skills:
+            edit_backlog(backlog_path, lambda t: backlog.add_new(t, [(pid, p, lines) for p, pid, lines in skills]))
         for i in items:
             store.put(lessons.SEEN, i["key"], mark)
         return _spent(agent)
