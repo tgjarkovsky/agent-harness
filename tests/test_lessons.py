@@ -30,10 +30,13 @@ def test_gather_feedback_kinds_and_texts():
         "rejected:d-1": "Testy pro lib — zamítnuto: nechci testy bez bugu",
         "failure:d-2": "Oprava — failed: npm test 2 failed",
         "unclear:d-3": "Výkon — UNCLEAR: co měřit?",
+        "pr:d-4": "Merged tiše — PR merged",
         "pr:d-5": "Merged s review — PR merged: příště menší diff",
         "pr:d-6": "Zavřený — PR closed: duplicitní"}
-    assert [i["kind"] for i in items if i["key"].startswith("pr:")] == ["review", "closed"]
-    assert quiet == ["pr:d-4"]  # open PR and failed gh: checked again next run
+    assert [i["kind"] for i in items if i["key"].startswith("pr:")] == ["merged", "review", "closed"]
+    assert quiet == []  # open PR and failed gh: checked again next run
+    merged = next(i for i in items if i["key"] == "pr:d-4")
+    assert merged["kind"] == "merged" and merged["text"].startswith("Merged tiše — PR merged")
 
 
 def test_gather_feedback_skips_seen():
@@ -114,3 +117,27 @@ def test_review_text_ignores_bots():
             "comments": [{"authorAssociation": "NONE", "body": "[vc]: deploy"}, {"authorAssociation": "OWNER", "body": "díky"}]}
     assert review_text(data).splitlines() == ["menší diff", "díky"]
     assert review_text({}) == ""
+
+
+def test_parse_reflection_skill():
+    items = [{"key": "pr:d-4", "project": "demo"}]
+    ok = {"scope": "skill", "project": "demo", "name": "pridani-stranky", "text": "Postup", "source": ["pr:d-4"]}
+    bad = [{**ok, "name": n} for n in ("Pridani Stranky", "x" * 41, "", None)] + [{**ok, "project": "*"}, {**ok, "project": "other"}]
+    out = lessons.parse_reflection(json.dumps([ok, *bad]), items)
+    assert [(o["project"], o["scope"], o["name"], o["title"]) for o in out] == [
+        ("demo", "skill", "pridani-stranky", "Skill pridani-stranky")]
+
+
+def test_make_reflect_skill_proposal(tmp_path, monkeypatch):
+    from harness.nodes.common import make_reflect
+    path = tmp_path / "BACKLOG.md"
+    path.write_bytes(BACKLOG.encode())
+    store = InMemoryStore()
+    monkeypatch.setattr(lessons, "current_store", lambda: store)
+    answer = json.dumps([{"scope": "skill", "project": "demo", "name": "pridani-stranky",
+                          "text": "Přidej stránku takto.", "source": ["pr:d-4"]}])
+    make_reflect(path, lambda items, known: (answer, {}), pr_info)({"run_id": "r"})
+    task = next(t for t in parse(path.read_text(encoding="utf-8")) if t.title == "Skill pridani-stranky")
+    assert task.status == "~" and task.project == "demo"
+    assert ".claude/skills/pridani-stranky/SKILL.md" in task.description
+    assert lessons.lessons(store, "demo") == []
